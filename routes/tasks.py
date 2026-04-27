@@ -1,6 +1,6 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
-from typing import List
+from typing import List, Optional
 
 import models
 import schemas
@@ -42,6 +42,61 @@ def get_tasks(db: Session = Depends(get_db)):
     """Get all tasks in the system"""
     tasks = db.query(models.Task).all()
     return tasks
+
+# Search and filtering - MUST come before /{task_id}
+@router.get("/search")
+def search_tasks(
+    location: Optional[str] = None,
+    min_price: Optional[int] = None,
+    max_price: Optional[int] = None,
+    status: Optional[str] = None,
+    db: Session = Depends(get_db)
+):
+    """
+    Search and filter tasks
+    - location: Filter by location (partial match)
+    - min_price: Minimum price
+    - max_price: Maximum price
+    - status: Task status (posted, assigned, in_progress, completed)
+    """
+    query = db.query(models.Task)
+    
+    # Filter by location (case-insensitive partial match)
+    if location:
+        query = query.filter(models.Task.location.ilike(f"%{location}%"))
+    
+    # Filter by price range
+    if min_price is not None:
+        query = query.filter(models.Task.price >= min_price)
+    if max_price is not None:
+        query = query.filter(models.Task.price <= max_price)
+    
+    # Filter by status
+    if status:
+        try:
+            task_status = models.TaskStatus[status]
+            query = query.filter(models.Task.status == task_status)
+        except KeyError:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Invalid status. Must be one of: {[s.value for s in models.TaskStatus]}"
+            )
+    
+    tasks = query.all()
+    
+    return [
+        {
+            "id": task.id,
+            "title": task.title,
+            "description": task.description,
+            "price": task.price,
+            "location": task.location,
+            "status": task.status.value,
+            "client_id": task.client_id,
+            "tasker_id": task.tasker_id
+        }
+        for task in tasks
+    ]
 
 # GET single task by ID
 @router.get("/{task_id}", response_model=schemas.TaskResponse)
