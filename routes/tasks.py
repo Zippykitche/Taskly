@@ -2,33 +2,26 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from typing import List, Optional
 
+import auth
 import models
 import schemas
 from database import SessionLocal
 
 router = APIRouter()
 
-# Dependency to get database session
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
-
 # CREATE a new task
 @router.post("/", response_model=schemas.TaskResponse)
-def create_task(task: schemas.TaskCreate, client_id: int, db: Session = Depends(get_db)):
+def create_task(
+    task: schemas.TaskCreate,
+    current_user: models.User = Depends(auth.get_current_user),
+    db: Session = Depends(auth.get_db)
+):
     """
-    Create a new task (for testing, we're passing client_id as a query param)
-    Later: get client_id from JWT token
+    Create a new task (client_id is automatically retrieved from JWT token)
     """
     db_task = models.Task(
-        title=task.title,
-        description=task.description,
-        price=task.price,
-        location=task.location,
-        client_id=client_id,
+        **task.dict(),
+        client_id=current_user.id,
         status=models.TaskStatus.posted
     )
     db.add(db_task)
@@ -38,19 +31,19 @@ def create_task(task: schemas.TaskCreate, client_id: int, db: Session = Depends(
 
 # GET all tasks
 @router.get("/", response_model=List[schemas.TaskResponse])
-def get_tasks(db: Session = Depends(get_db)):
+def get_tasks(db: Session = Depends(auth.get_db)):
     """Get all tasks in the system"""
     tasks = db.query(models.Task).all()
     return tasks
 
 # Search and filtering - MUST come before /{task_id}
-@router.get("/search")
+@router.get("/search", response_model=List[schemas.TaskResponse])
 def search_tasks(
     location: Optional[str] = None,
     min_price: Optional[int] = None,
     max_price: Optional[int] = None,
     status: Optional[str] = None,
-    db: Session = Depends(get_db)
+    db: Session = Depends(auth.get_db)
 ):
     """
     Search and filter tasks
@@ -82,25 +75,11 @@ def search_tasks(
                 detail=f"Invalid status. Must be one of: {[s.value for s in models.TaskStatus]}"
             )
     
-    tasks = query.all()
-    
-    return [
-        {
-            "id": task.id,
-            "title": task.title,
-            "description": task.description,
-            "price": task.price,
-            "location": task.location,
-            "status": task.status.value,
-            "client_id": task.client_id,
-            "tasker_id": task.tasker_id
-        }
-        for task in tasks
-    ]
+    return query.all()
 
 # GET single task by ID
 @router.get("/{task_id}", response_model=schemas.TaskResponse)
-def get_task(task_id: int, db: Session = Depends(get_db)):
+def get_task(task_id: int, db: Session = Depends(auth.get_db)):
     """Get a specific task by ID"""
     task = db.query(models.Task).filter(models.Task.id == task_id).first()
     if not task:
@@ -109,10 +88,13 @@ def get_task(task_id: int, db: Session = Depends(get_db)):
 
 # CLAIM a task (tasker assigns themselves)
 @router.post("/{task_id}/claim")
-def claim_task(task_id: int, tasker_id: int, db: Session = Depends(get_db)):
+def claim_task(
+    task_id: int, 
+    current_user: models.User = Depends(auth.get_current_user), 
+    db: Session = Depends(auth.get_db)
+):
     """
-    Tasker claims an available task
-    Later: get tasker_id from JWT token
+    Tasker claims an available task (tasker_id is retrieved from JWT token)
     """
     task = db.query(models.Task).filter(models.Task.id == task_id).first()
     if not task:
@@ -121,7 +103,7 @@ def claim_task(task_id: int, tasker_id: int, db: Session = Depends(get_db)):
     if task.status != models.TaskStatus.posted:
         raise HTTPException(status_code=400, detail="Task is not available")
     
-    task.tasker_id = tasker_id
+    task.tasker_id = current_user.id
     task.status = models.TaskStatus.assigned
     db.commit()
     db.refresh(task)
@@ -129,12 +111,22 @@ def claim_task(task_id: int, tasker_id: int, db: Session = Depends(get_db)):
 
 # COMPLETE a task
 @router.post("/{task_id}/complete")
-def complete_task(task_id: int, db: Session = Depends(get_db)):
-    """Mark a task as completed"""
+def complete_task(
+    task_id: int, 
+    current_user: models.User = Depends(auth.get_current_user),
+    db: Session = Depends(auth.get_db)
+):
+    """
+    Mark a task as completed. 
+    Only the assigned tasker can complete the task.
+    """
     task = db.query(models.Task).filter(models.Task.id == task_id).first()
     if not task:
         raise HTTPException(status_code=404, detail="Task not found")
     
+    if task.tasker_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Only the assigned tasker can complete this task")
+
     task.status = models.TaskStatus.completed
     db.commit()
     db.refresh(task)

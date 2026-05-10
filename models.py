@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, ForeignKey, Enum
+from sqlalchemy import Column, Integer, String, ForeignKey, Enum as SQLEnum
 from sqlalchemy.orm import relationship
 from database import Base
 import enum
@@ -15,34 +15,28 @@ class TaskStatus(str, enum.Enum):
 
 class User(Base):
     __tablename__ = "users"
-
-    id = Column(Integer, primary_key=True)
+    id = Column(Integer, primary_key=True, index=True)
     name = Column(String)
-    email = Column(String, unique=True)
+    email = Column(String, unique=True, index=True)
     password = Column(String)
-    role = Column(Enum(UserRole))
+    role = Column(SQLEnum(UserRole))
     phone = Column(String)
 
 class Task(Base):
     __tablename__ = "tasks"
-
-    id = Column(Integer, primary_key=True)
+    id = Column(Integer, primary_key=True, index=True)
     title = Column(String)
     description = Column(String)
     price = Column(Integer)
     location = Column(String)
-
-    status = Column(Enum(TaskStatus), default=TaskStatus.posted)
-
+    status = Column(SQLEnum(TaskStatus), default=TaskStatus.posted)
     client_id = Column(Integer, ForeignKey("users.id"))
     tasker_id = Column(Integer, ForeignKey("users.id"), nullable=True)
 
 class Review(Base):
     __tablename__ = "reviews"
-
-    id = Column(Integer, primary_key=True)
+    id = Column(Integer, primary_key=True, index=True)
     rating = Column(Integer)
     comment = Column(String)
-
     task_id = Column(Integer, ForeignKey("tasks.id"))
     reviewer_id = Column(Integer, ForeignKey("users.id"))

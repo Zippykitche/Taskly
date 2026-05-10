@@ -255,11 +255,11 @@ backend/
 
 **Week 1** (Current)
 - ✅ Task CRUD operations
-- ⬜ User registration/login
-- ⬜ Reviews system
+- ✅ User registration/login
+- ✅ Reviews system
 
 **Week 2**
-- ⬜ JWT authentication
+- ✅ JWT authentication
 - ⬜ Deploy to Render/Railway
 - ⬜ Connect React Native frontend
 

@@ -9,18 +9,11 @@ from database import SessionLocal
 
 router = APIRouter()
 
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
-
 @router.post("/", status_code=status.HTTP_201_CREATED)
 def create_review(
     review: schemas.ReviewCreate,
     current_user: models.User = Depends(auth.get_current_user),
-    db: Session = Depends(get_db)
+    db: Session = Depends(auth.get_db)
 ):
     """
     Create a review for a completed task
@@ -86,31 +79,13 @@ def create_review(
         "task_id": db_review.task_id
     }
 
-@router.get("/", response_model=List[dict])
-def get_all_reviews(db: Session = Depends(get_db)):
+@router.get("/", response_model=List[schemas.ReviewResponse])
+def get_all_reviews(db: Session = Depends(auth.get_db)):
     """Get all reviews"""
     reviews = db.query(models.Review).all()
-    return [
-        {
-            "id": review.id,
-            "rating": review.rating,
-            "comment": review.comment,
-            "task_id": review.task_id,
-            "reviewer_id": review.reviewer_id
-        }
-        for review in reviews
-    ]
+    return reviews
 
-@router.get("/task/{task_id}")
-def get_task_reviews(task_id: int, db: Session = Depends(get_db)):
+@router.get("/task/{task_id}", response_model=List[schemas.ReviewResponse])
+def get_task_reviews(task_id: int, db: Session = Depends(auth.get_db)):
     """Get all reviews for a specific task"""
-    reviews = db.query(models.Review).filter(models.Review.task_id == task_id).all()
-    return [
-        {
-            "id": review.id,
-            "rating": review.rating,
-            "comment": review.comment,
-            "reviewer_id": review.reviewer_id
-        }
-        for review in reviews
-    ]
+    return db.query(models.Review).filter(models.Review.task_id == task_id).all()

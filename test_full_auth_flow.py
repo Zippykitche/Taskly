@@ -1,12 +1,14 @@
 import requests
+import time
 
 BASE = "http://127.0.0.1:8000"
+unique_suffix = int(time.time())
 
-print("=== 1. REGISTER USERS ===")
+print(f"=== 1. REGISTER USERS ({unique_suffix}) ===")
 # Register client
 client_response = requests.post(f"{BASE}/users/register", json={
     "name": "Alice Client",
-    "email": "alice@taskly.com",
+    "email": f"alice_{unique_suffix}@taskly.com",
     "password": "secure123",
     "role": "client",
     "phone": "0711111111"
@@ -16,7 +18,7 @@ print("Client registration:", client_response.json())
 # Register tasker
 tasker_response = requests.post(f"{BASE}/users/register", json={
     "name": "Bob Tasker",
-    "email": "bob@taskly.com",
+    "email": f"bob_{unique_suffix}@taskly.com",
     "password": "secure456",
     "role": "tasker",
     "phone": "0722222222"
@@ -26,7 +28,7 @@ print("Tasker registration:", tasker_response.json())
 print("\n=== 2. LOGIN ===")
 # Login as client
 login_response = requests.post(f"{BASE}/users/login", data={
-    "username": "alice@taskly.com",
+    "username": f"alice_{unique_suffix}@taskly.com",
     "password": "secure123"
 })
 client_token = login_response.json()["access_token"]
@@ -34,29 +36,22 @@ print("Client login:", login_response.json())
 
 # Login as tasker
 tasker_login = requests.post(f"{BASE}/users/login", data={
-    "username": "bob@taskly.com",
+    "username": f"bob_{unique_suffix}@taskly.com",
     "password": "secure456"
 })
 tasker_token = tasker_login.json()["access_token"]
 print("Tasker login:", tasker_login.json())
 
-print("\n=== 3. GET CURRENT USER ===")
-me_response = requests.get(
-    f"{BASE}/users/me",
-    headers={"Authorization": f"Bearer {client_token}"}
-)
-print("Current user:", me_response.json())
-
 print("\n=== 4. CREATE TASK (with auth) ===")
-# Note: We still need to update tasks.py to use auth - doing that next
 task_response = requests.post(
-    f"{BASE}/tasks/?client_id={login_response.json()['user_id']}",
+    f"{BASE}/tasks/",
     json={
         "title": "Clean my apartment",
         "description": "Deep clean 2-bedroom apartment",
         "price": 3000,
         "location": "Kilimani"
-    }
+    },
+    headers={"Authorization": f"Bearer {client_token}"}
 )
 task_id = task_response.json()["id"]
 print("Task created:", task_response.json())
@@ -72,12 +67,16 @@ print("Price filter:", price_search.json())
 
 print("\n=== 6. CLAIM TASK ===")
 claim_response = requests.post(
-    f"{BASE}/tasks/{task_id}/claim?tasker_id={tasker_login.json()['user_id']}"
+    f"{BASE}/tasks/{task_id}/claim",
+    headers={"Authorization": f"Bearer {tasker_token}"}
 )
 print("Task claimed:", claim_response.json())
 
 print("\n=== 7. COMPLETE TASK ===")
-complete_response = requests.post(f"{BASE}/tasks/{task_id}/complete")
+complete_response = requests.post(
+    f"{BASE}/tasks/{task_id}/complete",
+    headers={"Authorization": f"Bearer {tasker_token}"}
+)
 print("Task completed:", complete_response.json())
 
 print("\n=== 8. CREATE REVIEW (with auth) ===")
