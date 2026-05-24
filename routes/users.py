@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from fastapi.security import OAuth2PasswordRequestForm
 from datetime import timedelta
+from typing import List, Optional
 
 import models
 import schemas
@@ -24,8 +25,14 @@ def register_user(user: schemas.UserCreate, db: Session = Depends(auth.get_db)):
         name=user.name,
         email=user.email,
         password=hashed_pw,
+        location=user.location,
         role=user.role,
-        phone=user.phone
+        phone=user.phone,
+        bio=user.bio,
+        skills=user.skills,
+        experience=user.experience,
+        availability=user.availability,
+        photo_url=user.photo_url
     )
     
     db.add(new_user)
@@ -50,3 +57,80 @@ def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depend
         data={"sub": user.email}, expires_delta=access_token_expires
     )
     return {"access_token": access_token, "token_type": "bearer"}
+
+@router.get("/me", response_model=schemas.UserResponse)
+def get_me(current_user: models.User = Depends(auth.get_current_user)):
+    """Get current logged in user details"""
+    return current_user
+
+@router.get("/workers", response_model=List[schemas.UserResponse])
+def list_all_workers(db: Session = Depends(auth.get_db)):
+    """List all registered workers"""
+    return db.query(models.User).filter(models.User.role == models.UserRole.worker).all()
+
+@router.get("/workers/{worker_id}", response_model=schemas.UserResponse)
+def get_worker_profile(worker_id: int, db: Session = Depends(auth.get_db)):
+    """Get a specific worker's public profile"""
+    worker = db.query(models.User).filter(
+        models.User.id == worker_id, 
+        models.User.role == models.UserRole.worker
+    ).first()
+    
+    if not worker:
+        raise HTTPException(status_code=404, detail="Worker not found")
+    return worker
+
+@router.get("/workers/search", response_model=List[schemas.UserResponse])
+def search_workers(
+    skill: Optional[str] = None,
+    location: Optional[str] = None,
+    availability: Optional[str] = None,
+    db: Session = Depends(auth.get_db)
+):
+    """Search for workers based on skill, location, and availability"""
+    query = db.query(models.User).filter(models.User.role == models.UserRole.worker)
+    
+    if skill:
+        query = query.filter(models.User.skills.ilike(f"%{skill}%"))
+    
+    if location:
+        query = query.filter(models.User.location.ilike(f"%{location}%"))
+        
+    if availability:
+        query = query.filter(models.User.availability.ilike(f"%{availability}%"))
+        
+    return query.all()
+
+def calculate_profile_completeness(user: models.User) -> int:
+    """Calculates a score based on how many worker profile fields are filled."""
+    score = 0
+    if user.bio: score += 1
+    if user.skills: score += 1
+    if user.experience: score += 1
+    if user.availability: score += 1
+    if user.photo_url: score += 1
+    return score
+
+@router.get("/workers/recommended", response_model=List[schemas.UserResponse])
+def get_recommended_workers(
+    recruiter_location: Optional[str] = None,
+    db: Session = Depends(auth.get_db)
+):
+    """
+    Get a list of recommended workers.
+    Recommendations are based on profile completeness and optional location.
+    """
+    query = db.query(models.User).filter(models.User.role == models.UserRole.worker)
+
+    if recruiter_location:
+        # Simple partial match for location for Phase 1
+        query = query.filter(models.User.location.ilike(f"%{recruiter_location}%"))
+    
+    workers = query.all()
+
+    # Sort by profile completeness (descending)
+    # For Phase 1, "most active" is omitted as it requires more complex tracking.
+    # "Nearest location" is handled by the filter.
+    workers.sort(key=lambda w: calculate_profile_completeness(w), reverse=True)
+
+    return workers

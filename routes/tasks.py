@@ -17,11 +17,11 @@ def create_task(
     db: Session = Depends(auth.get_db)
 ):
     """
-    Create a new task (client_id is automatically retrieved from JWT token)
+    Create a new task (recruiter_id is automatically retrieved from JWT token)
     """
     db_task = models.Task(
         **task.dict(),
-        client_id=current_user.id,
+        recruiter_id=current_user.id,
         status=models.TaskStatus.posted
     )
     db.add(db_task)
@@ -94,7 +94,7 @@ def claim_task(
     db: Session = Depends(auth.get_db)
 ):
     """
-    Tasker claims an available task (tasker_id is retrieved from JWT token)
+    Worker claims an available task (worker_id is retrieved from JWT token)
     """
     task = db.query(models.Task).filter(models.Task.id == task_id).first()
     if not task:
@@ -103,7 +103,7 @@ def claim_task(
     if task.status != models.TaskStatus.posted:
         raise HTTPException(status_code=400, detail="Task is not available")
     
-    task.tasker_id = current_user.id
+    task.worker_id = current_user.id
     task.status = models.TaskStatus.assigned
     db.commit()
     db.refresh(task)
@@ -118,14 +118,14 @@ def complete_task(
 ):
     """
     Mark a task as completed. 
-    Only the assigned tasker can complete the task.
+    Only the assigned worker can complete the task.
     """
     task = db.query(models.Task).filter(models.Task.id == task_id).first()
     if not task:
         raise HTTPException(status_code=404, detail="Task not found")
     
-    if task.tasker_id != current_user.id:
-        raise HTTPException(status_code=403, detail="Only the assigned tasker can complete this task")
+    if task.worker_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Only the assigned worker can complete this task")
 
     task.status = models.TaskStatus.completed
     db.commit()
