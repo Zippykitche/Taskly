@@ -1,23 +1,32 @@
 from fastapi import FastAPI
-from routes import users, tasks, reviews, bookings, notifications, search, payments, support, jobs
-from database import engine, Base
-import models
+from fastapi.middleware.cors import CORSMiddleware
+from database import init_db
+from routes import auth_routes
 
-# Create database tables
-Base.metadata.create_all(bind=engine)
+app = FastAPI(title="Taskly Tasker API", version="1.0.0")
 
-app = FastAPI()
+# CORS
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Update in production
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
-app.include_router(users.router, prefix="/users", tags=["users"])
-app.include_router(tasks.router, prefix="/tasks", tags=["tasks"])
-app.include_router(reviews.router, prefix="/reviews", tags=["reviews"])
-app.include_router(bookings.router, prefix="/bookings", tags=["bookings"])
-app.include_router(notifications.router, prefix="/notifications", tags=["notifications"])
-app.include_router(search.router, prefix="/search", tags=["search"])
-app.include_router(payments.router, prefix="/payments", tags=["payments"])
-app.include_router(support.router, prefix="/support", tags=["support"])
-app.include_router(jobs.router, prefix="/jobs", tags=["jobs"])
+# Initialize database on startup
+@app.on_event("startup")
+async def startup_event():
+    init_db()
 
+# Health check
 @app.get("/")
-def root():
-    return {"message": "Taskly API running"}
+async def root():
+    return {"message": "Taskly Tasker API", "status": "online"}
+
+# Register routes
+app.include_router(auth_routes.router)
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8003)

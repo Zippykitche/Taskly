@@ -1,7 +1,13 @@
 fastapi
-uvicorn
+uvicorn[standard]
 sqlalchemy
-psycopg2-binary
-pydantic
+alembic
 python-jose[cryptography]
-httpx==0.27.0
+passlib[bcrypt]
+python-multipart
+httpx
+cloudinary
+psycopg2-binary
+pydantic>=2.13.0
+pydantic-settings
+python-dotenv
