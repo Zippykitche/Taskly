@@ -1,76 +1,116 @@
-import os
+import httpx
 import base64
 from datetime import datetime
-import httpx
+import os
+from typing import Optional
 from dotenv import load_dotenv
 
 load_dotenv()
 
-MPESA_CONSUMER_KEY = os.getenv("MPESA_CONSUMER_KEY", "")
-MPESA_CONSUMER_SECRET = os.getenv("MPESA_CONSUMER_SECRET", "")
-MPESA_SHORTCODE = os.getenv("MPESA_SHORTCODE", "")
-MPESA_PASSKEY = os.getenv("MPESA_PASSKEY", "")
-MPESA_ENV = os.getenv("MPESA_ENV", "sandbox")
-
-MPESA_BASE_URL = "https://sandbox.safaricom.co.ke" if MPESA_ENV == "sandbox" else "https://api.safaricom.co.ke"
-
 
 class MPesaClient:
     def __init__(self):
-        self.base_url = MPESA_BASE_URL
-        self.consumer_key = MPESA_CONSUMER_KEY
-        self.consumer_secret = MPESA_CONSUMER_SECRET
-        self.shortcode = MPESA_SHORTCODE
-        self.passkey = MPESA_PASSKEY
+        self.consumer_key = os.getenv("MPESA_CONSUMER_KEY")
+        self.consumer_secret = os.getenv("MPESA_CONSUMER_SECRET")
+        self.business_shortcode = os.getenv("MPESA_SHORTCODE", "174379")
+        self.passkey = os.getenv("MPESA_PASSKEY")
+        self.environment = os.getenv("MPESA_ENVIRONMENT", "sandbox")
+
+        if self.environment == "production":
+            self.base_url = "https://api.safaricom.co.ke"
+        else:
+            self.base_url = "https://sandbox.safaricom.co.ke"
 
     async def get_access_token(self) -> str:
-        auth_string = f"{self.consumer_key}:{self.consumer_secret}"
-        encoded = base64.b64encode(auth_string.encode()).decode()
-        headers = {"Authorization": f"Basic {encoded}"}
-        async with httpx.AsyncClient() as client:
-            response = await client.get(f"{self.base_url}/oauth/v1/generate?grant_type=client_credentials", headers=headers)
-            response.raise_for_status()
-            return response.json()["access_token"]
+        url = f"{self.base_url}/oauth/v1/generate?grant_type=client_credentials"
+        credentials = f"{self.consumer_key}:{self.consumer_secret}"
+        encoded = base64.b64encode(credentials.encode()).decode()
 
-    async def simulate_stk_push(self, phone_number: str, amount: int, account_reference: str, transaction_desc: str) -> dict:
-        token = await self.get_access_token()
-        timestamp = datetime.utcnow().strftime("%Y%m%d%H%M%S")
-        password = base64.b64encode(f"{self.shortcode}{self.passkey}{timestamp}".encode()).decode()
+        headers = {"Authorization": f"Basic {encoded}"}
+
+        async with httpx.AsyncClient() as client:
+            response = await client.get(url, headers=headers)
+            response.raise_for_status()
+            data = response.json()
+            return data["access_token"]
+
+    async def stk_push(
+        self,
+        phone_number: str,
+        amount: int,
+        account_reference: str,
+        transaction_desc: str,
+        callback_url: str,
+    ) -> dict:
+        access_token = await self.get_access_token()
+        timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+        password = base64.b64encode(
+            f"{self.business_shortcode}{self.passkey}{timestamp}".encode()
+        ).decode()
+
+        url = f"{self.base_url}/mpesa/stkpush/v1/processrequest"
+
+        headers = {
+            "Authorization": f"Bearer {access_token}",
+            "Content-Type": "application/json",
+        }
+
         payload = {
-            "BusinessShortCode": self.shortcode,
+            "BusinessShortCode": self.business_shortcode,
             "Password": password,
             "Timestamp": timestamp,
             "TransactionType": "CustomerPayBillOnline",
             "Amount": amount,
             "PartyA": phone_number,
-            "PartyB": self.shortcode,
+            "PartyB": self.business_shortcode,
             "PhoneNumber": phone_number,
-            "CallBackURL": os.getenv("MPESA_CALLBACK_URL", "https://example.com/mpesa/callback"),
+            "CallBackURL": callback_url,
             "AccountReference": account_reference,
             "TransactionDesc": transaction_desc,
         }
-        headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
+
         async with httpx.AsyncClient() as client:
-            response = await client.post(f"{self.base_url}/mpesa/stkpush/v1/processrequest", json=payload, headers=headers)
+            response = await client.post(url, json=payload, headers=headers)
             response.raise_for_status()
             return response.json()
 
-    async def b2c_payment(self, phone_number: str, amount: int, remarks: str = "Taskly payout") -> dict:
-        token = await self.get_access_token()
+    async def b2c_payment(
+        self,
+        phone_number: str,
+        amount: int,
+        remarks: str,
+        result_url: str,
+        timeout_url: str,
+    ) -> dict:
+        access_token = await self.get_access_token()
+
+        url = f"{self.base_url}/mpesa/b2c/v1/paymentrequest"
+
+        security_credential = os.getenv("MPESA_SECURITY_CREDENTIAL")
+        initiator_name = os.getenv("MPESA_INITIATOR_NAME", "testapi")
+
+        headers = {
+            "Authorization": f"Bearer {access_token}",
+            "Content-Type": "application/json",
+        }
+
         payload = {
-            "InitiatorName": os.getenv("MPESA_INITIATOR_NAME", ""),
-            "SecurityCredential": os.getenv("MPESA_SECURITY_CREDENTIAL", ""),
+            "InitiatorName": initiator_name,
+            "SecurityCredential": security_credential,
             "CommandID": "BusinessPayment",
             "Amount": amount,
-            "PartyA": self.shortcode,
+            "PartyA": self.business_shortcode,
             "PartyB": phone_number,
             "Remarks": remarks,
-            "QueueTimeOutURL": os.getenv("MPESA_QUEUE_TIMEOUT_URL", "https://example.com/mpesa/timeout"),
-            "ResultURL": os.getenv("MPESA_RESULT_URL", "https://example.com/mpesa/result"),
+            "QueueTimeOutURL": timeout_url,
+            "ResultURL": result_url,
             "Occasion": "Taskly Withdrawal",
         }
-        headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
+
         async with httpx.AsyncClient() as client:
-            response = await client.post(f"{self.base_url}/mpesa/b2c/v1/paymentrequest", json=payload, headers=headers)
+            response = await client.post(url, json=payload, headers=headers)
             response.raise_for_status()
             return response.json()
+
+
+mpesa_client = MPesaClient()

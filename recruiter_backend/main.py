@@ -2,6 +2,8 @@ import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
+
+load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), ".env"), override=True)
 from shared.database import init_db
 from recruiter_backend.routes.auth import router as auth_router
 from recruiter_backend.routes.jobs import router as jobs_router
