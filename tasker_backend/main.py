@@ -7,6 +7,7 @@ from tasker_backend.routes.auth import router as auth_router
 from tasker_backend.routes.jobs import router as jobs_router
 from tasker_backend.routes.earnings import router as earnings_router
 from tasker_backend.routes.profile import router as profile_router
+from tasker_backend.routes.notifications import router as notifications_router
 
 load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), ".env"))
 
@@ -24,6 +25,7 @@ app.include_router(auth_router, prefix="/auth", tags=["auth"])
 app.include_router(jobs_router, prefix="/jobs", tags=["jobs"])
 app.include_router(earnings_router, prefix="/earnings", tags=["earnings"])
 app.include_router(profile_router, prefix="/profile", tags=["profile"])
+app.include_router(notifications_router, prefix="/notifications", tags=["notifications"])
 
 
 @app.on_event("startup")

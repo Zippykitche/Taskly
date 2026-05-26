@@ -7,6 +7,7 @@ from recruiter_backend.routes.auth import router as auth_router
 from recruiter_backend.routes.jobs import router as jobs_router
 from recruiter_backend.routes.payments import router as payments_router
 from recruiter_backend.routes.hire import router as hire_router
+from recruiter_backend.routes.notifications import router as notifications_router
 
 load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), ".env"))
 
@@ -24,6 +25,7 @@ app.include_router(auth_router, prefix="/auth", tags=["auth"])
 app.include_router(jobs_router, prefix="/jobs", tags=["jobs"])
 app.include_router(payments_router, prefix="/payments", tags=["payments"])
 app.include_router(hire_router, prefix="/hire", tags=["hire"])
+app.include_router(notifications_router, prefix="/notifications", tags=["notifications"])
 
 
 @app.on_event("startup")
