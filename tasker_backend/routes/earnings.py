@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from shared.database import get_db
 from shared.models.user import Tasker, Wallet
 from shared.models.transaction import Transaction, Withdrawal
-from shared.auth import get_current_tasker
+from tasker_backend.routes.auth import get_current_tasker
 from shared.services.mpesa import mpesa_client
 from shared.services.notifications import send_push
 from datetime import datetime

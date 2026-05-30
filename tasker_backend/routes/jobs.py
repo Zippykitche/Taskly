@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from shared.database import get_db
 from shared.models.user import Tasker
 from shared.models.job import Job, JobStatus, JobApplication
-from shared.auth import get_current_tasker
+from tasker_backend.routes.auth import get_current_tasker
 from shared.services.earl_ai import earl_client
 from shared.services.notifications import send_push
 from datetime import datetime

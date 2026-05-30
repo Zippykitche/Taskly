@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from shared.database import get_db
 from shared.models.user import Tasker, Wallet
 from shared.models.job import Job, JobStatus
-from shared.auth import get_current_tasker
+from tasker_backend.routes.auth import get_current_tasker
 from shared.services.cloudinary_service import upload_profile_image, upload_id_image
 from pydantic import BaseModel
 from typing import List, Optional

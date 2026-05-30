@@ -4,7 +4,7 @@ from shared.database import get_db
 from shared.models.job import Job, JobStatus
 from shared.models.transaction import Transaction, TransactionStatus
 from shared.models.user import Recruiter
-from shared.auth import get_current_recruiter
+from recruiter_backend.routes.auth import get_current_recruiter
 from shared.services.escrow import escrow
 from shared.services.notifications import send_push
 from pydantic import BaseModel

@@ -45,7 +45,7 @@ class EARLAIClient:
         self,
         category: str,
         description: str,
-    ) -> Dict[str, Any]:
+    ) -> float:
         prompt = f"""Analyze this job for pricing:
 
 Category: {category}
@@ -72,7 +72,8 @@ Return ONLY JSON:
         elif clean.startswith("```"):
             clean = clean.split("```")[1].split("```")[0].strip()
 
-        return json.loads(clean)
+        parsed = json.loads(clean)
+        return float(parsed.get("complexity_score", 1.0))
 
     async def rank_jobs_for_tasker(
         self,
