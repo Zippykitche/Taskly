@@ -4,7 +4,7 @@ from shared.database import get_db
 from shared.models.user import Tasker
 from shared.models.job import Job, JobStatus, JobApplication
 from tasker_backend.routes.auth import get_current_tasker
-from shared.services.earl_ai import earl_client
+from shared.services.claude_ai import ClaudeAI
 from shared.services.notifications import send_push
 from datetime import datetime
 from typing import List, Optional
@@ -56,69 +56,44 @@ async def browse_jobs(
 
 @router.get("/recommended")
 async def get_recommended_jobs(
-    limit: int = 10,
     current_tasker: Tasker = Depends(get_current_tasker),
     db: Session = Depends(get_db)
 ):
-    """Get AI-recommended jobs for this tasker"""
+    """Get AI-powered job recommendations"""
     
-    # Get available jobs in tasker's categories
-    jobs = db.query(Job).filter(
-        Job.status == JobStatus.OPEN,
-        Job.category.in_(current_tasker.categories),
-        Job.location_city == current_tasker.location_city
-    ).limit(50).all()
+    print("🤖 Claude generating recommendations...")
     
-    if not jobs:
-        return {"jobs": [], "message": "No jobs available in your area"}
+    # Get open jobs
+    all_jobs = db.query(Job).filter(Job.status == JobStatus.OPEN).all()
     
-    # Get AI rankings from E.A.R.L
-    try:
-        tasker_profile = {
-            "id": current_tasker.id,
-            "categories": current_tasker.categories,
-            "rating": current_tasker.rating,
-            "jobs_completed": current_tasker.jobs_completed,
-            "location": current_tasker.location_city
+    jobs_data = [
+        {
+            "job_id": job.id,
+            "title": job.title,
+            "description": job.description,
+            "category": job.category,
+            "price": job.price,
+            "urgency": job.urgency,
+            "location": f"{job.location_city}, {job.location_area}"
         }
-        
-        jobs_data = [
-            {
-                "id": job.id,
-                "title": job.title,
-                "category": job.category,
-                "price": job.price / 100,
-                "location": f"{job.location_area}, {job.location_city}",
-                "urgency": job.urgency
-            }
-            for job in jobs
-        ]
-        
-        ranked_jobs = await earl_client.rank_jobs_for_tasker(
-            tasker_profile=tasker_profile,
-            jobs=jobs_data
-        )
-        
-        # Reorder jobs based on AI ranking
-        job_map = {job.id: job for job in jobs}
-        recommended = []
-        
-        for ranking in ranked_jobs[:limit]:
-            job = job_map.get(ranking["job_id"])
-            if job:
-                job_dict = job.to_dict()
-                job_dict["match_score"] = ranking["match_score"]
-                job_dict["match_reason"] = ranking["why"]
-                recommended.append(job_dict)
-        
-        return {"jobs": recommended}
+        for job in all_jobs
+    ]
     
-    except Exception as e:
-        # Fallback to simple sorting if AI fails
-        return {
-            "jobs": [job.to_dict() for job in jobs[:limit]],
-            "error": "AI ranking unavailable, showing recent jobs"
-        }
+    # Get recommendations from Claude
+    recommendations = ClaudeAI.recommend_jobs(
+        tasker_categories=current_tasker.categories,
+        tasker_rating=current_tasker.rating or 0,
+        available_jobs=jobs_data,
+        limit=5
+    )
+    
+    print(f"✅ Found {len(recommendations)} recommendations")
+    
+    return {
+        "recommended_jobs": recommendations,
+        "total_available": len(all_jobs),
+        "tasker_categories": current_tasker.categories
+    }
 
 @router.get("/{job_id}")
 async def get_job_details(

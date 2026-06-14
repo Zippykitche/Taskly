@@ -5,6 +5,7 @@ from shared.models.job import Job, JobStatus
 from shared.models.transaction import Transaction, TransactionStatus
 from shared.models.user import Recruiter
 from recruiter_backend.routes.auth import get_current_recruiter
+from . import auth
 from shared.services.escrow import escrow
 from shared.services.notifications import send_push
 from pydantic import BaseModel
@@ -20,13 +21,13 @@ class PaymentRequest(BaseModel):
 @router.post("/initiate")
 async def initiate_payment(
     request: PaymentRequest,
-    current_recruiter: Recruiter = Depends(get_current_recruiter),
+    current_user: dict = Depends(auth.get_current_recruiter),  # For recruiter backend
     db: Session = Depends(get_db)
 ):
     """Initiate payment for a job via M-Pesa STK Push"""
     
     # Verify job belongs to recruiter
-    job = db.query(Job).filter_by(id=request.job_id, recruiter_id=current_recruiter.id).first()
+    job = db.query(Job).filter_by(id=request.job_id, recruiter_id=current_user.id).first()
     
     if not job:
         raise HTTPException(404, "Job not found")
@@ -48,7 +49,7 @@ async def initiate_payment(
         transaction = await escrow.initiate_payment(
             db=db,
             job_id=request.job_id,
-            recruiter_id=current_recruiter.id,
+            recruiter_id=current_user.id,
             tasker_id=tasker_id,
             total_amount=job.price,
             phone_number=request.phone_number
@@ -56,7 +57,7 @@ async def initiate_payment(
         
         # Notify recruiter
         send_push(
-            user_id=current_recruiter.id,
+            user_id=current_user.id,
             user_type="recruiter",
             title="Payment Initiated",
             body=f"Enter M-Pesa PIN to complete payment for Job #{job.id}",
@@ -77,12 +78,12 @@ async def get_transaction_history(
     status: Optional[str] = None,
     limit: int = 20,
     offset: int = 0,
-    current_recruiter: Recruiter = Depends(get_current_recruiter),
+    current_user: dict = Depends(auth.get_current_recruiter),  # For recruiter backend
     db: Session = Depends(get_db)
 ):
     """Get recruiter's transaction history"""
     
-    query = db.query(Transaction).filter_by(recruiter_id=current_recruiter.id)
+    query = db.query(Transaction).filter_by(recruiter_id=current_user.id)
     
     if status:
         try:
@@ -102,14 +103,14 @@ async def get_transaction_history(
 @router.get("/{transaction_id}")
 async def get_transaction(
     transaction_id: int,
-    current_recruiter: Recruiter = Depends(get_current_recruiter),
+    current_user: dict = Depends(auth.get_current_recruiter),  # For recruiter backend
     db: Session = Depends(get_db)
 ):
     """Get transaction details"""
     
     transaction = db.query(Transaction).filter_by(
         id=transaction_id,
-        recruiter_id=current_recruiter.id
+        recruiter_id=current_user.id
     ).first()
     
     if not transaction:

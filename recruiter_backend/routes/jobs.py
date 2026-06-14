@@ -5,7 +5,7 @@ from shared.models.job import Job, JobStatus, JobApplication
 from shared.models.user import Recruiter
 from shared.models.pricing import ServicePricing
 from recruiter_backend.routes.auth import get_current_recruiter
-from shared.services.earl_ai import earl_client
+from shared.services.claude_ai import ClaudeAI
 from shared.services.notifications import send_push
 from pydantic import BaseModel
 from datetime import datetime
@@ -13,75 +13,79 @@ from typing import List, Optional
 
 router = APIRouter(prefix="/jobs", tags=["Jobs"])
 
-class JobCreate(BaseModel):
+class CreateJobRequest(BaseModel):
     title: str
     description: str
     category: str
-    subcategory: Optional[str] = None
     location_city: str
     location_area: str
-    location_address: Optional[str] = None
-    latitude: Optional[float] = None
-    longitude: Optional[float] = None
-    urgency: str = "normal"
-    deadline: Optional[str] = None
-    images: Optional[List[str]] = None
+    location_address: str
+    urgency: str  # "normal", "urgent", "asap"
 
 @router.post("/create")
 async def create_job(
-    payload: JobCreate,
+    job_data: CreateJobRequest,
     current_recruiter: Recruiter = Depends(get_current_recruiter),
     db: Session = Depends(get_db)
 ):
-    """Create a new job posting"""
+    """Create job with AI-calculated fair price"""
     
-    # Get pricing for category
-    pricing = db.query(ServicePricing).filter_by(category=payload.category).first()
+    print(f"📝 Creating job: {job_data.title}")
     
-    if not pricing:
-        raise HTTPException(400, f"No pricing configured for category: {payload.category}")
+    # 1. Get complexity score from Claude
+    print("🤖 Claude analyzing job complexity...")
+    complexity = ClaudeAI.analyze_job_complexity(
+        title=job_data.title,
+        description=job_data.description,
+        category=job_data.category,
+        urgency=job_data.urgency
+    )
     
-    # Analyze job complexity using E.A.R.L
-    try:
-        complexity = await earl_client.analyze_job_complexity(
-            description=payload.description,
-            category=payload.category,
-            urgency=payload.urgency,
-            location=f"{payload.location_city}, {payload.location_area}"
-        )
-    except Exception as e:
-        complexity = 1.5  # Default to middle value
+    complexity_score = complexity["complexity_score"]
+    print(f"✅ Complexity: {complexity_score}")
     
-    # Ensure complexity is within bounds
-    complexity = max(pricing.min_complexity, min(pricing.max_complexity, complexity))
+    # 2. Base prices by category
+    base_prices = {
+        "Plumbing": 1500,
+        "Electrical": 2000,
+        "Carpentry": 1800,
+        "Cleaning": 1000,
+        "Tutoring": 2500,
+        "Nanny": 3000,
+        "House Help": 1200,
+        "Painting": 1600,
+        "Gardening": 1400,
+    }
+    base_price = base_prices.get(job_data.category, 2000)
     
-    # Calculate price with multipliers
-    location_multiplier = pricing.location_multiplier.get(payload.location_city, 1.0) if pricing.location_multiplier else 1.0
-    urgency_multiplier = pricing.urgency_multiplier.get(payload.urgency, 1.0) if pricing.urgency_multiplier else 1.0
+    # 3. Apply multipliers
+    urgency_multiplier = {
+        "normal": 1.0,
+        "urgent": 1.3,
+        "asap": 1.5
+    }.get(job_data.urgency, 1.0)
     
-    total_price = int(pricing.base_price * location_multiplier * urgency_multiplier * complexity)
-    commission = int(total_price * pricing.commission_rate)
-    tasker_earnings = total_price - commission
+    location_multiplier = 1.1  # Nairobi markup
     
-    # Create job
+    # 4. Calculate final price
+    final_price = int(
+        base_price * complexity_score * urgency_multiplier * location_multiplier
+    )
+    
+    print(f"💰 Final price: {final_price} KES")
+    
+    # 5. Create job in database
     job = Job(
         recruiter_id=current_recruiter.id,
-        title=payload.title,
-        description=payload.description,
-        category=payload.category,
-        subcategory=payload.subcategory,
-        location_city=payload.location_city,
-        location_area=payload.location_area,
-        location_address=payload.location_address,
-        latitude=payload.latitude,
-        longitude=payload.longitude,
-        price=total_price,
-        tasker_earnings=tasker_earnings,
-        platform_commission=commission,
-        complexity_score=complexity,
-        urgency=payload.urgency,
-        deadline=datetime.fromisoformat(payload.deadline) if payload.deadline else None,
-        images=payload.images or [],
+        title=job_data.title,
+        description=job_data.description,
+        category=job_data.category,
+        location_city=job_data.location_city,
+        location_area=job_data.location_area,
+        location_address=job_data.location_address,
+        price=final_price,
+        complexity_score=complexity_score,
+        urgency=job_data.urgency,
         status=JobStatus.OPEN
     )
     
@@ -93,9 +97,17 @@ async def create_job(
     current_recruiter.jobs_posted += 1
     db.commit()
     
+    print(f"✅ Job created with ID: {job.id}")
+    
     return {
-        "message": "Job created successfully",
-        "job": job.to_dict()
+        "job_id": job.id,
+        "title": job.title,
+        "price": final_price,
+        "complexity_score": complexity_score,
+        "complexity_level": complexity["difficulty_level"],
+        "reasoning": complexity["reasoning"],
+        "status": "open",
+        "created_at": job.created_at
     }
 
 @router.get("/my/jobs")
@@ -149,7 +161,7 @@ async def get_job_details(
 @router.put("/{job_id}")
 async def update_job(
     job_id: int,
-    updates: JobCreate,
+    updates: CreateJobRequest,
     current_recruiter: Recruiter = Depends(get_current_recruiter),
     db: Session = Depends(get_db)
 ):
