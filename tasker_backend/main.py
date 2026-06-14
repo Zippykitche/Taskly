@@ -89,14 +89,14 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends()):
 jobs_db = {}
 job_counter = 1
 
-@app.post("/jobs/browse")
+@app.get("/jobs/browse")
 async def browse_jobs(current_user: str = Depends(get_current_user)):
     return {
         "jobs": list(jobs_db.values()),
         "total": len(jobs_db)
     }
 
-@app.post("/jobs/recommended")
+@app.get("/jobs/recommended")
 async def recommend_jobs(current_user: str = Depends(get_current_user)):
     user = users_db[current_user]
     user_categories = user.get("categories", [])
