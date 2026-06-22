@@ -1,16 +1,24 @@
 from fastapi import FastAPI, Depends, HTTPException, status
-from sqlalchemy.orm import Session
-from shared.models.database import (
-    get_db, User, Job, Application, WorkImage, Transaction
-)
+from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
+from pydantic import BaseModel
 import jwt
 import os
 from datetime import datetime, timedelta
-from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
-from pydantic import BaseModel
+from sqlalchemy.orm import Session
+from dotenv import load_dotenv
+
+# Import database stuff
+from shared.database import get_db, engine, Base
+from shared.models.db_models import User, Job, Application, WorkImage, Wallet
+
+load_dotenv()
 
 app = FastAPI(title="Taskly Tasker Backend")
 
+# Create all tables on startup
+Base.metadata.create_all(bind=engine)
+
+# ========== CONFIG ==========
 SECRET_KEY = os.getenv("JWT_SECRET", "test_secret_key_taskly")
 ALGORITHM = "HS256"
 
@@ -29,7 +37,17 @@ class Token(BaseModel):
     access_token: str
     token_type: str
 
-# ========== AUTH ==========
+class UploadImage(BaseModel):
+    job_id: int
+    image_type: str
+    image_url: str
+    cloudinary_id: str
+
+class VerifyWork(BaseModel):
+    job_id: int
+    both_parties_agree: bool = False
+
+# ========== HELPER FUNCTIONS ==========
 def create_access_token(data: dict, expires_delta=None):
     to_encode = data.copy()
     if expires_delta:
@@ -48,41 +66,44 @@ async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = De
         phone = payload.get("sub")
         if phone is None:
             raise HTTPException(status_code=401, detail="Invalid token")
-        return phone
+        
+        user = db.query(User).filter(User.phone_number == phone).first()
+        if not user:
+            raise HTTPException(status_code=401, detail="User not found")
+        
+        return user
     except:
         raise HTTPException(status_code=401, detail="Invalid token")
 
-# ========== REGISTRATION ==========
+# ========== AUTH ROUTES ==========
 @app.post("/auth/register")
-async def register(user: UserRegister, db: Session = Depends(get_db)):
-    # Check if user exists
-    existing = db.query(User).filter(User.phone_number == user.phone_number).first()
+async def register(user_data: UserRegister, db: Session = Depends(get_db)):
+    existing = db.query(User).filter(User.phone_number == user_data.phone_number).first()
     if existing:
         raise HTTPException(status_code=400, detail="User already exists")
     
-    # Create new user
-    db_user = User(
-        phone_number=user.phone_number,
-        password=user.password,  # In production, hash this!
-        full_name=user.full_name,
-        email=user.email,
-        user_type="tasker",
-        id_number=user.id_number,
-        categories=user.categories,
-        location_city=user.location_city,
-        location_area=user.location_area
+    new_user = User(
+        phone_number=user_data.phone_number,
+        password=user_data.password,
+        full_name=user_data.full_name,
+        email=user_data.email,
+        id_number=user_data.id_number,
+        categories=user_data.categories,
+        location_city=user_data.location_city,
+        location_area=user_data.location_area,
+        user_type="tasker"
     )
-    db.add(db_user)
+    
+    db.add(new_user)
     db.commit()
-    db.refresh(db_user)
+    db.refresh(new_user)
     
     return {
-        "user_id": db_user.phone_number,
-        "full_name": db_user.full_name,
+        "user_id": new_user.phone_number,
+        "full_name": new_user.full_name,
         "message": "Registration successful"
     }
 
-# ========== LOGIN ==========
 @app.post("/auth/login", response_model=Token)
 async def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
     user = db.query(User).filter(User.phone_number == form_data.username).first()
@@ -92,68 +113,70 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = 
     access_token = create_access_token(data={"sub": form_data.username})
     return {"access_token": access_token, "token_type": "bearer"}
 
-# ========== JOBS - BROWSE ==========
+# ========== JOB ROUTES ==========
 @app.get("/jobs/browse")
-async def browse_jobs(current_user: str = Depends(get_current_user), db: Session = Depends(get_db)):
+async def browse_jobs(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     jobs = db.query(Job).filter(Job.status == "open").all()
     return {
         "jobs": [
             {
-                "job_id": j.id,
-                "title": j.title,
-                "category": j.category,
-                "price": j.price,
-                "location": f"{j.location_city}, {j.location_area}"
+                "job_id": job.id,
+                "title": job.title,
+                "category": job.category,
+                "price": job.price,
+                "urgency": job.urgency,
+                "location": f"{job.location_city}, {job.location_area}",
+                "created_at": job.created_at.isoformat()
             }
-            for j in jobs
+            for job in jobs
         ],
         "total": len(jobs)
     }
 
-# ========== JOBS - RECOMMENDATIONS ==========
 @app.get("/jobs/recommended")
-async def recommend_jobs(current_user: str = Depends(get_current_user), db: Session = Depends(get_db)):
-    user = db.query(User).filter(User.phone_number == current_user).first()
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
+async def recommend_jobs(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    # Get jobs matching user's categories
+    jobs = db.query(Job).filter(Job.status == "open").all()
     
-    user_categories = user.categories or []
-    jobs = db.query(Job).filter(
-        Job.status == "open",
-        Job.category.in_(user_categories)
-    ).all()
+    matching = []
+    for job in jobs:
+        if job.category in current_user.categories:
+            matching.append({
+                "job_id": job.id,
+                "title": job.title,
+                "category": job.category,
+                "price": job.price,
+                "match_score": 0.95,
+                "location": f"{job.location_city}, {job.location_area}"
+            })
     
     return {
-        "recommendations": [
-            {
-                "job_id": j.id,
-                "title": j.title,
-                "category": j.category,
-                "price": j.price
-            }
-            for j in jobs
-        ],
-        "total": len(jobs)
+        "recommendations": matching,
+        "total": len(matching)
     }
 
-# ========== APPLICATIONS ==========
-class ApplicationCreate(BaseModel):
-    job_id: int
-    cover_letter: str = "Interested in this job"
-
 @app.post("/jobs/{job_id}/apply")
-async def apply_for_job(job_id: int, app_data: ApplicationCreate, 
-                       current_user: str = Depends(get_current_user), 
-                       db: Session = Depends(get_db)):
+async def apply_for_job(job_id: int, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     job = db.query(Job).filter(Job.id == job_id).first()
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
     
+    # Check if already applied
+    existing = db.query(Application).filter(
+        Application.job_id == job_id,
+        Application.tasker_id == current_user.id
+    ).first()
+    if existing:
+        raise HTTPException(status_code=400, detail="Already applied")
+    
     application = Application(
         job_id=job_id,
-        tasker_id=current_user,
-        cover_letter=app_data.cover_letter
+        tasker_id=current_user.id,
+        tasker_phone=current_user.phone_number,
+        cover_letter="Interested in this job",
+        status="pending"
     )
+    
     db.add(application)
     db.commit()
     db.refresh(application)
@@ -164,60 +187,98 @@ async def apply_for_job(job_id: int, app_data: ApplicationCreate,
         "status": "pending"
     }
 
-# ========== PROFILE ==========
-@app.get("/profile/me")
-async def get_profile(current_user: str = Depends(get_current_user), db: Session = Depends(get_db)):
-    user = db.query(User).filter(User.phone_number == current_user).first()
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
+# ========== IMAGE ROUTES ==========
+@app.post("/jobs/{job_id}/upload-image")
+async def upload_work_image(job_id: int, image_data: UploadImage, 
+                           current_user: User = Depends(get_current_user), 
+                           db: Session = Depends(get_db)):
+    job = db.query(Job).filter(Job.id == job_id).first()
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    
+    image = WorkImage(
+        job_id=job_id,
+        uploaded_by=current_user.phone_number,
+        image_url=image_data.image_url,
+        image_type=image_data.image_type,
+        cloudinary_id=image_data.cloudinary_id
+    )
+    
+    db.add(image)
+    db.commit()
+    db.refresh(image)
     
     return {
-        "phone_number": user.phone_number,
-        "full_name": user.full_name,
-        "email": user.email,
-        "categories": user.categories,
-        "location_city": user.location_city,
-        "location_area": user.location_area
+        "image_id": image.id,
+        "job_id": job_id,
+        "message": f"{image_data.image_type.capitalize()} image uploaded",
+        "status": "success"
     }
 
-# ========== WALLET ==========
-@app.get("/earnings/wallet")
-async def get_wallet(current_user: str = Depends(get_current_user), db: Session = Depends(get_db)):
-    transactions = db.query(Transaction).filter(
-        Transaction.tasker_id == current_user,
-        Transaction.status == "completed"
-    ).all()
+@app.get("/jobs/{job_id}/images")
+async def get_job_images(job_id: int, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    job = db.query(Job).filter(Job.id == job_id).first()
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
     
-    balance = sum(t.amount for t in transactions)
+    images = db.query(WorkImage).filter(WorkImage.job_id == job_id).all()
     
     return {
-        "balance": balance,
+        "job_id": job_id,
+        "images": [
+            {
+                "image_id": img.id,
+                "type": img.image_type,
+                "url": img.image_url,
+                "uploaded_at": img.uploaded_at.isoformat()
+            }
+            for img in images
+        ],
+        "total": len(images)
+    }
+
+# ========== PROFILE ROUTES ==========
+@app.get("/profile/me")
+async def get_profile(current_user: User = Depends(get_current_user)):
+    return {
+        "phone_number": current_user.phone_number,
+        "full_name": current_user.full_name,
+        "email": current_user.email,
+        "categories": current_user.categories,
+        "location_city": current_user.location_city,
+        "location_area": current_user.location_area,
+        "rating": current_user.rating,
+        "total_jobs": current_user.total_jobs
+    }
+
+# ========== EARNINGS ROUTES ==========
+@app.get("/earnings/wallet")
+async def get_wallet(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    wallet = db.query(Wallet).filter(Wallet.user_id == current_user.id).first()
+    
+    if not wallet:
+        wallet = Wallet(user_id=current_user.id)
+        db.add(wallet)
+        db.commit()
+    
+    return {
+        "balance": wallet.balance,
         "currency": "KES",
-        "available_withdrawal": balance
+        "available_withdrawal": wallet.available_withdrawal,
+        "total_earned": wallet.total_earned
     }
 
 @app.get("/earnings/transactions")
-async def get_transactions(current_user: str = Depends(get_current_user), db: Session = Depends(get_db)):
-    transactions = db.query(Transaction).filter(Transaction.tasker_id == current_user).all()
-    
+async def get_transactions(current_user: User = Depends(get_current_user)):
     return {
-        "transactions": [
-            {
-                "transaction_id": t.id,
-                "job_id": t.job_id,
-                "amount": t.amount,
-                "status": t.status,
-                "created_at": t.created_at.isoformat()
-            }
-            for t in transactions
-        ],
-        "total": len(transactions)
+        "transactions": [],
+        "total": 0
     }
 
-# ========== HEALTH ==========
+# ========== HEALTH CHECK ==========
 @app.get("/")
 async def health():
-    return {"status": "Tasker Backend Running on 8002"}
+    return {"status": "Tasker Backend Running on 8002", "database": "PostgreSQL"}
 
 if __name__ == "__main__":
     import uvicorn
