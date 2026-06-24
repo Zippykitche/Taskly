@@ -10,6 +10,8 @@ from dotenv import load_dotenv
 # Import database stuff
 from shared.database import get_db, engine, Base
 from shared.models.db_models import User, Job, Application, WorkImage, Wallet
+from shared.services.email_service import email_service
+from shared.services.ratings_service import ratings_service
 
 load_dotenv()
 
@@ -46,6 +48,10 @@ class UploadImage(BaseModel):
 class VerifyWork(BaseModel):
     job_id: int
     both_parties_agree: bool = False
+
+class RatingCreate(BaseModel):
+    score: int
+    comment: str | None = None
 
 # ========== HELPER FUNCTIONS ==========
 def create_access_token(data: dict, expires_delta=None):
@@ -249,6 +255,68 @@ async def get_profile(current_user: User = Depends(get_current_user)):
         "location_area": current_user.location_area,
         "rating": current_user.rating,
         "total_jobs": current_user.total_jobs
+    }
+
+# ========== RATING ROUTES ==========
+@app.get("/ratings/me")
+async def get_my_ratings(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    ratings = ratings_service.get_user_ratings(db, current_user.id)
+    return {
+        "average_rating": current_user.rating,
+        "total": len(ratings),
+        "ratings": [
+            {
+                "rating_id": rating.id,
+                "job_id": rating.job_id,
+                "rater_id": rating.rater_id,
+                "score": rating.score,
+                "comment": rating.comment,
+                "created_at": rating.created_at.isoformat(),
+            }
+            for rating in ratings
+        ],
+    }
+
+@app.post("/jobs/{job_id}/ratings")
+async def rate_recruiter(
+    job_id: int,
+    rating_data: RatingCreate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    job = db.query(Job).filter(Job.id == job_id).first()
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+
+    application = db.query(Application).filter(
+        Application.job_id == job_id,
+        Application.tasker_id == current_user.id,
+        Application.status == "accepted",
+    ).first()
+    if not application:
+        raise HTTPException(status_code=403, detail="Only the accepted tasker can rate this job")
+
+    try:
+        rating = ratings_service.create_rating(
+            db=db,
+            job_id=job_id,
+            rater_id=current_user.id,
+            ratee_id=job.recruiter_id,
+            score=rating_data.score,
+            comment=rating_data.comment,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+    recruiter = db.query(User).filter(User.id == job.recruiter_id).first()
+    if recruiter:
+        email_service.send_rating_received(recruiter.email, rating.score, job.title)
+
+    return {
+        "rating_id": rating.id,
+        "job_id": job_id,
+        "score": rating.score,
+        "message": "Rating submitted",
     }
 
 # ========== EARNINGS ROUTES ==========

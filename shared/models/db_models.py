@@ -28,6 +28,21 @@ class User(Base):
     jobs = relationship("Job", back_populates="recruiter")
     applications = relationship("Application", back_populates="tasker")
     wallet = relationship("Wallet", back_populates="user", uselist=False)
+    ratings_given = relationship(
+        "Rating",
+        foreign_keys="Rating.rater_id",
+        back_populates="rater",
+    )
+    ratings_received = relationship(
+        "Rating",
+        foreign_keys="Rating.ratee_id",
+        back_populates="ratee",
+    )
+    disputes_opened = relationship(
+        "Dispute",
+        foreign_keys="Dispute.opened_by_id",
+        back_populates="opened_by",
+    )
 
 
 class Job(Base):
@@ -109,3 +124,38 @@ class Transaction(Base):
     status = Column(String, default="pending")
     mpesa_reference = Column(String, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class Rating(Base):
+    __tablename__ = "ratings"
+    __table_args__ = {"extend_existing": True}
+
+    id = Column(Integer, primary_key=True, index=True)
+    job_id = Column(Integer, ForeignKey("jobs.id"), nullable=False)
+    rater_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    ratee_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    score = Column(Integer, nullable=False)
+    comment = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    job = relationship("Job")
+    rater = relationship("User", foreign_keys=[rater_id], back_populates="ratings_given")
+    ratee = relationship("User", foreign_keys=[ratee_id], back_populates="ratings_received")
+
+
+class Dispute(Base):
+    __tablename__ = "disputes"
+    __table_args__ = {"extend_existing": True}
+
+    id = Column(Integer, primary_key=True, index=True)
+    job_id = Column(Integer, ForeignKey("jobs.id"), nullable=False)
+    opened_by_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    reason = Column(String, nullable=False)
+    description = Column(Text, nullable=True)
+    status = Column(String, default="open")
+    resolution = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    resolved_at = Column(DateTime, nullable=True)
+
+    job = relationship("Job")
+    opened_by = relationship("User", foreign_keys=[opened_by_id], back_populates="disputes_opened")

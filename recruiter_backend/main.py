@@ -9,7 +9,9 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from shared.database import Base, engine, get_db
-from shared.models.db_models import Application, Job, User, WorkImage
+from shared.models.db_models import Application, Dispute, Job, User, WorkImage
+from shared.services.email_service import email_service
+from shared.services.mpesa_service import mpesa_service
 
 load_dotenv()
 
@@ -38,6 +40,15 @@ class JobCreate(BaseModel):
     location_area: str
     location_address: str
     urgency: str
+
+
+class PaymentInitiate(BaseModel):
+    phone_number: str | None = None
+
+
+class DisputeCreate(BaseModel):
+    reason: str
+    description: str | None = None
 
 
 class Token(BaseModel):
@@ -256,6 +267,182 @@ async def approve_work(
         "status": "approved",
         "message": "Work approved. Payment will be released.",
         "amount": job.price,
+    }
+
+
+@app.post("/jobs/{job_id}/payments/initiate")
+async def initiate_payment(
+    job_id: int,
+    payment_data: PaymentInitiate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    job = db.query(Job).filter(Job.id == job_id).first()
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    if job.recruiter_id != current_user.id:
+        raise HTTPException(status_code=403, detail="You can only pay for your own jobs")
+
+    try:
+        payment = await mpesa_service.initiate_job_payment(
+            db=db,
+            job=job,
+            recruiter=current_user,
+            phone_number=payment_data.phone_number,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+    return {
+        "job_id": job_id,
+        "amount": job.price,
+        **payment,
+    }
+
+
+@app.post("/jobs/{job_id}/payments/release")
+async def release_payment(
+    job_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    job = db.query(Job).filter(Job.id == job_id).first()
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    if job.recruiter_id != current_user.id:
+        raise HTTPException(status_code=403, detail="You can only release payment for your own jobs")
+    if job.status == "disputed":
+        raise HTTPException(status_code=400, detail="Cannot release payment while job is disputed")
+
+    try:
+        release = mpesa_service.release_job_payment(db, job)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+    tasker = db.query(User).filter(User.id == release["tasker_id"]).first()
+    if tasker:
+        email_service.send_payment_released(tasker.email, int(release["tasker_amount"]), job.title)
+
+    return {
+        "message": "Payment released",
+        **release,
+    }
+
+
+@app.post("/jobs/{job_id}/disputes")
+async def open_dispute(
+    job_id: int,
+    dispute_data: DisputeCreate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    job = db.query(Job).filter(Job.id == job_id).first()
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    if job.recruiter_id != current_user.id:
+        raise HTTPException(status_code=403, detail="You can only dispute your own jobs")
+
+    existing = db.query(Dispute).filter(
+        Dispute.job_id == job_id,
+        Dispute.status == "open",
+    ).first()
+    if existing:
+        raise HTTPException(status_code=400, detail="An open dispute already exists for this job")
+
+    dispute = Dispute(
+        job_id=job_id,
+        opened_by_id=current_user.id,
+        reason=dispute_data.reason,
+        description=dispute_data.description,
+        status="open",
+    )
+    job.status = "disputed"
+
+    db.add(dispute)
+    db.commit()
+    db.refresh(dispute)
+
+    application = db.query(Application).filter(
+        Application.job_id == job_id,
+        Application.status == "accepted",
+    ).first()
+    if application:
+        tasker = db.query(User).filter(User.id == application.tasker_id).first()
+        if tasker:
+            email_service.send_dispute_opened(tasker.email, job.title, dispute.reason)
+
+    return {
+        "dispute_id": dispute.id,
+        "job_id": job_id,
+        "status": dispute.status,
+        "message": "Dispute opened",
+    }
+
+
+@app.get("/disputes")
+async def list_disputes(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    disputes = (
+        db.query(Dispute)
+        .join(Job, Dispute.job_id == Job.id)
+        .filter(Job.recruiter_id == current_user.id)
+        .order_by(Dispute.created_at.desc())
+        .all()
+    )
+
+    return {
+        "total": len(disputes),
+        "disputes": [
+            {
+                "dispute_id": dispute.id,
+                "job_id": dispute.job_id,
+                "reason": dispute.reason,
+                "description": dispute.description,
+                "status": dispute.status,
+                "resolution": dispute.resolution,
+                "created_at": dispute.created_at.isoformat(),
+                "resolved_at": dispute.resolved_at.isoformat() if dispute.resolved_at else None,
+            }
+            for dispute in disputes
+        ],
+    }
+
+
+@app.get("/jobs/{job_id}/disputes")
+async def get_job_disputes(
+    job_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    job = db.query(Job).filter(Job.id == job_id).first()
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    if job.recruiter_id != current_user.id:
+        raise HTTPException(status_code=403, detail="You can only view disputes for your own jobs")
+
+    disputes = (
+        db.query(Dispute)
+        .filter(Dispute.job_id == job_id)
+        .order_by(Dispute.created_at.desc())
+        .all()
+    )
+    return {
+        "job_id": job_id,
+        "total": len(disputes),
+        "disputes": [
+            {
+                "dispute_id": dispute.id,
+                "reason": dispute.reason,
+                "description": dispute.description,
+                "status": dispute.status,
+                "resolution": dispute.resolution,
+                "created_at": dispute.created_at.isoformat(),
+                "resolved_at": dispute.resolved_at.isoformat() if dispute.resolved_at else None,
+            }
+            for dispute in disputes
+        ],
     }
 
 
