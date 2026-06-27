@@ -9,7 +9,7 @@ router = APIRouter()
 
 @router.get("/recommended")
 async def get_recommended_jobs(
-    current_user: models.User = Depends(auth.get_current_worker),
+    current_user: dict = Depends(auth.get_current_tasker),  # For tasker backend
     db: Session = Depends(auth.get_db)
 ):
     # Get available tasks (filtering by location if provided)

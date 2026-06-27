@@ -1,0 +1,6 @@
+{
+  "job_id": 1,
+  "image_type": "after",
+  "image_url": "https://example.com/after.jpg",
+  "cloudinary_id": "abc456"
+}

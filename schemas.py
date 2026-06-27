@@ -1,7 +1,23 @@
 from pydantic import BaseModel, EmailStr, Field
 from typing import Optional, List
 from datetime import date, datetime
-from models import UserRole, TaskStatus, BookingStatus
+from enum import Enum
+
+class UserRole(str, Enum):
+    TASKER = "tasker"
+    RECRUITER = "recruiter"
+
+class TaskStatus(str, Enum):
+    OPEN = "open"
+    IN_PROGRESS = "in_progress"
+    COMPLETED = "completed"
+    CANCELLED = "cancelled"
+
+class BookingStatus(str, Enum):
+    PENDING = "pending"
+    ACCEPTED = "accepted"
+    COMPLETED = "completed"
+    DISPUTED = "disputed"
 
 class UserCreate(BaseModel):
     name: str
