@@ -12,7 +12,7 @@ class EmailService:
     def __init__(self):
         api_key = os.getenv("SENDGRID_API_KEY")
         self.sg = SendGridAPIClient(api_key) if SendGridAPIClient and api_key else None
-        self.from_email = os.getenv("TASKLY_FROM_EMAIL", "noreply@taskly.com")
+        self.from_email = os.getenv("SENDGRID_FROM_EMAIL", "noreply@taskly.com")
 
     def _send(self, to_email: str, subject: str, html_content: str) -> bool:
         if not self.sg or not Mail or not to_email:
