@@ -1,4 +1,65 @@
-# Miscellaneous OS files
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual Environments
+venv/
+env/
+ENV/
+.venv/
+pip-selfcheck.json
+
+# Pytest / Coverage
+.cache/
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.nosexy
+nosetests.xml
+coverage.xml
+*.cover
+.hypothesis/
+
+# Database
+*.db
+*.sqlite3
+
+# Secrets, private keys, and environment variables
+.env
+.env.local
+.env.*.local
+*.env
+*.env.*
+*.key
+*.keystore
+*.jks
+*.p12
+*.pem
+local.properties
+key.properties
+
+# OS files
 .DS_Store
 .AppleDouble
 .LSOverride
@@ -22,20 +83,6 @@ Thumbs.db
 *.sublime-workspace
 .history/
 *.log
-
-# Secrets, private keys, and environment variables
-.env
-.env.local
-.env.*.local
-*.env
-*.env.*
-*.key
-*.keystore
-*.jks
-*.p12
-*.pem
-local.properties
-key.properties
 
 # Dart / Flutter
 **/.dart_tool/
@@ -62,7 +109,7 @@ key.properties
 **/linux/flutter/ephemeral/
 **/windows/flutter/ephemeral/
 
-# Node/Web dependencies (if Node is used)
+# Node/Web dependencies
 node_modules/
 npm-debug.log*
 yarn-debug.log*
