@@ -1,0 +1,22 @@
+name: taskly_user_app
+description: Taskly AI customer Flutter frontend.
+publish_to: none
+version: 0.1.0
+environment:
+  sdk: ">=3.3.0 <4.0.0"
+dependencies:
+  flutter:
+    sdk: flutter
+  shared_theme:
+    path: ../../packages/shared_theme
+  shared_ui:
+    path: ../../packages/shared_ui
+  shared_components:
+    path: ../../packages/shared_components
+  shared_models:
+    path: ../../packages/shared_models
+  ai_mock:
+    path: ../../packages/ai_mock
+
+flutter:
+  uses-material-design: true
