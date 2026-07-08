@@ -323,7 +323,6 @@ class _UserShellState extends State<UserShell> {
   Widget build(BuildContext context) {
     final pages = [
       const HomeScreen(),
-      const TaskCreationScreen(),
       const TrackingScreen(),
       const MessagesScreen(),
       const UserProfileScreen(),
@@ -358,12 +357,192 @@ class _UserShellState extends State<UserShell> {
         items: const [
           BottomNavigationBarItem(icon: Icon(AppIcons.home), label: 'Home'),
           BottomNavigationBarItem(
-              icon: Icon(Icons.add_task_rounded), label: 'Create'),
-          BottomNavigationBarItem(
               icon: Icon(Icons.near_me_rounded), label: 'Track'),
           BottomNavigationBarItem(icon: Icon(AppIcons.chat), label: 'Chat'),
           BottomNavigationBarItem(
               icon: Icon(AppIcons.profile), label: 'Profile'),
+        ],
+      ),
+    );
+  }
+}
+
+class _HomeAiBriefCard extends StatelessWidget {
+  const _HomeAiBriefCard({required this.preview});
+
+  final AiTaskPreview preview;
+
+  @override
+  Widget build(BuildContext context) {
+    // Filter matching taskers based on AI parsed category
+    final category = preview.category.toLowerCase();
+    var matchingTaskers = taskers.where((t) {
+      final skill = t.skill.toLowerCase();
+      if (category.contains('clean') && skill.contains('clean')) return true;
+      if (category.contains('handy') &&
+          (skill.contains('handy') || skill.contains('assembly'))) return true;
+      if ((category.contains('child') ||
+              category.contains('baby') ||
+              category.contains('errand')) &&
+          (skill.contains('child') || skill.contains('errand'))) return true;
+      return false;
+    }).toList();
+
+    if (matchingTaskers.isEmpty) {
+      matchingTaskers = taskers;
+    }
+
+    String getTaskerImage(TaskerProfile tasker) {
+      final index = taskers.indexOf(tasker);
+      if (index != -1) {
+        return _taskerImages[index % _taskerImages.length];
+      }
+      return _taskerImages[0];
+    }
+
+    return Container(
+      padding: AppSpacing.cardLarge,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: AppRadius.lgBorder,
+        border: Border.all(color: const Color(0xFFE2E8F0), width: 1.2),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 16,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  gradient: AppColors.aiGradient,
+                  borderRadius: AppRadius.mdBorder,
+                ),
+                child: const Icon(Icons.auto_awesome_rounded,
+                    color: Colors.white, size: 20),
+              ),
+              const SizedBox(width: AppSpacing.sm),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'AI Task Brief & Matches',
+                      style: context.type.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w900,
+                        color: const Color(0xFF0F172A),
+                        letterSpacing: -0.2,
+                      ),
+                    ),
+                    const Text(
+                      'Brief generated & taskers matching your query',
+                      style: TextStyle(
+                          color: Color(0xFF64748B),
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.lg),
+          Text(
+            preview.title,
+            style: context.type.headlineSmall?.copyWith(
+              fontWeight: FontWeight.w900,
+              color: const Color(0xFF0F172A),
+              letterSpacing: -0.4,
+            ),
+          ),
+          const SizedBox(height: AppSpacing.xs),
+          Text(
+            preview.description,
+            style: const TextStyle(
+                color: Color(0xFF475569), height: 1.5, fontSize: 13.5),
+          ),
+          const SizedBox(height: AppSpacing.md),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              MetaChip(
+                label: preview.category,
+                icon: Icons.category_rounded,
+                backgroundColor: const Color(0xFFF8FAFC),
+                borderColor: const Color(0xFFE2E8F0),
+                textColor: const Color(0xFF475569),
+              ),
+              MetaChip(
+                label: preview.suggestedBudget,
+                icon: Icons.payments_rounded,
+                backgroundColor: const Color(0xFFF8FAFC),
+                borderColor: const Color(0xFFE2E8F0),
+                textColor: const Color(0xFF475569),
+              ),
+              MetaChip(
+                label: preview.duration,
+                icon: Icons.schedule_rounded,
+                backgroundColor: const Color(0xFFF8FAFC),
+                borderColor: const Color(0xFFE2E8F0),
+                textColor: const Color(0xFF475569),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.lg),
+          const Divider(color: Color(0xFFE2E8F0)),
+          const SizedBox(height: AppSpacing.sm),
+          Text(
+            'Recommended Taskers',
+            style: context.type.titleMedium?.copyWith(
+              fontWeight: FontWeight.w900,
+              color: const Color(0xFF0F172A),
+              letterSpacing: -0.2,
+            ),
+          ),
+          const SizedBox(height: AppSpacing.xs),
+          const Text(
+            'Top-rated specialists in your area who match this task:',
+            style: TextStyle(
+                color: Color(0xFF64748B),
+                fontSize: 12,
+                fontWeight: FontWeight.w600),
+          ),
+          const SizedBox(height: AppSpacing.md),
+          SizedBox(
+            height: 350,
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              physics: const BouncingScrollPhysics(),
+              itemCount: matchingTaskers.length,
+              separatorBuilder: (_, __) => const SizedBox(width: AppSpacing.md),
+              itemBuilder: (context, i) {
+                final tasker = matchingTaskers[i];
+                return PremiumTaskerCard(
+                  key: ValueKey(tasker.name),
+                  tasker: tasker,
+                  imageUrl: getTaskerImage(tasker),
+                );
+              },
+            ),
+          ),
+          const SizedBox(height: AppSpacing.lg),
+          TasklyButton(
+            label: "Confirm Task & Publish",
+            icon: AppIcons.ai,
+            onPressed: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const MatchingScreen()),
+              );
+            },
+          ),
         ],
       ),
     );
@@ -631,7 +810,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       const SkeletonBox(height: 180),
                     ] else if (preview != null) ...[
                       const SizedBox(height: AppSpacing.lg),
-                      AiSuggestionCard(preview: preview!),
+                      _HomeAiBriefCard(preview: preview!),
                     ],
                   ],
                 ),
@@ -792,399 +971,6 @@ class ChatMessage {
     this.customWidget,
     DateTime? timestamp,
   }) : timestamp = timestamp ?? DateTime.now();
-}
-
-class TaskCreationScreen extends StatefulWidget {
-  const TaskCreationScreen({super.key});
-
-  @override
-  State<TaskCreationScreen> createState() => _TaskCreationScreenState();
-}
-
-class _TaskCreationScreenState extends State<TaskCreationScreen> {
-  final List<ChatMessage> _messages = [];
-  final TextEditingController _inputController = TextEditingController();
-  final ScrollController _scrollController = ScrollController();
-  bool _isTyping = false;
-  final ai = AiMockService();
-
-  @override
-  void initState() {
-    super.initState();
-    _messages.add(ChatMessage(
-      text:
-          "Hello! I'm your Taskly AI assistant. What task do you need help with today? Please describe it in detail (e.g. category, budget, timeline, location details).",
-      isUser: false,
-    ));
-  }
-
-  @override
-  void dispose() {
-    _inputController.dispose();
-    _scrollController.dispose();
-    super.dispose();
-  }
-
-  Future<void> _sendMessage(String text) async {
-    if (text.trim().isEmpty) return;
-
-    setState(() {
-      _messages.add(ChatMessage(text: text, isUser: true));
-      _isTyping = true;
-    });
-    _inputController.clear();
-    _scrollToBottom();
-
-    // Call Mock AI Service
-    final preview = await ai.generateTaskPreview(text);
-
-    // Simulate ChatGPT typing delay
-    await Future.delayed(const Duration(milliseconds: 1600));
-
-    if (!mounted) return;
-
-    // Filter matching taskers based on AI parsed category
-    final category = preview.category.toLowerCase();
-    var matchingTaskers = taskers.where((t) {
-      final skill = t.skill.toLowerCase();
-      if (category.contains('clean') && skill.contains('clean')) return true;
-      if (category.contains('handy') &&
-          (skill.contains('handy') || skill.contains('assembly'))) return true;
-      if ((category.contains('child') ||
-              category.contains('baby') ||
-              category.contains('errand')) &&
-          (skill.contains('child') || skill.contains('errand'))) return true;
-      return false;
-    }).toList();
-
-    if (matchingTaskers.isEmpty) {
-      matchingTaskers = taskers;
-    }
-
-    String getTaskerImage(TaskerProfile tasker) {
-      final index = taskers.indexOf(tasker);
-      if (index != -1) {
-        return _taskerImages[index % _taskerImages.length];
-      }
-      return _taskerImages[0];
-    }
-
-    final responseText =
-        "I've analyzed your description and compiled a custom task brief:\n\n"
-        "• **Title**: ${preview.title}\n"
-        "• **Category**: ${preview.category}\n"
-        "• **Estimated Duration**: ${preview.duration}\n"
-        "• **Suggested Budget**: ${preview.suggestedBudget}\n\n"
-        "Based on this brief, here are the top-rated taskers in your area who specialize in this. Choose a tasker below to confirm your booking:";
-
-    setState(() {
-      _isTyping = false;
-      _messages.add(ChatMessage(
-        text: responseText,
-        isUser: false,
-        customWidget: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const SizedBox(height: AppSpacing.md),
-            SizedBox(
-              height: 350,
-              child: ListView.separated(
-                scrollDirection: Axis.horizontal,
-                physics: const BouncingScrollPhysics(),
-                itemCount: matchingTaskers.length,
-                separatorBuilder: (_, __) =>
-                    const SizedBox(width: AppSpacing.md),
-                itemBuilder: (context, i) {
-                  final tasker = matchingTaskers[i];
-                  return PremiumTaskerCard(
-                    key: ValueKey(tasker.name),
-                    tasker: tasker,
-                    imageUrl: getTaskerImage(tasker),
-                  );
-                },
-              ),
-            ),
-            const SizedBox(height: AppSpacing.md),
-            TasklyButton(
-              label: "Confirm Task & Publish",
-              icon: AppIcons.ai,
-              onPressed: () {
-                Navigator.of(context).push(
-                  MaterialPageRoute(builder: (_) => const MatchingScreen()),
-                );
-              },
-            ),
-          ],
-        ),
-      ));
-    });
-    _scrollToBottom();
-  }
-
-  void _scrollToBottom() {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (_scrollController.hasClients) {
-        _scrollController.animateTo(
-          _scrollController.position.maxScrollExtent,
-          duration: AppAnimations.medium,
-          curve: Curves.easeOut,
-        );
-      }
-    });
-  }
-
-  Widget _buildMessageText(String text, bool isUser) {
-    if (isUser) {
-      return Text(
-        text,
-        style: const TextStyle(
-          fontSize: 14,
-          fontWeight: FontWeight.w600,
-          color: Colors.black,
-          height: 1.4,
-        ),
-      );
-    }
-
-    final spans = <TextSpan>[];
-    final parts = text.split('**');
-    for (var i = 0; i < parts.length; i++) {
-      final isBold = i % 2 == 1;
-      spans.add(TextSpan(
-        text: parts[i],
-        style: TextStyle(
-          fontWeight: isBold ? FontWeight.w900 : FontWeight.w600,
-          color: isBold ? Colors.black : const Color(0xFF0F172A),
-        ),
-      ));
-    }
-
-    return RichText(
-      text: TextSpan(
-        style: const TextStyle(
-          fontSize: 14,
-          height: 1.4,
-        ),
-        children: spans,
-      ),
-    );
-  }
-
-  Widget _buildMessageBubble(ChatMessage message) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8.0),
-      child: Column(
-        crossAxisAlignment:
-            message.isUser ? CrossAxisAlignment.end : CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: message.isUser
-                ? MainAxisAlignment.end
-                : MainAxisAlignment.start,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              if (!message.isUser) ...[
-                Container(
-                  margin: const EdgeInsets.only(right: 8),
-                  padding: const EdgeInsets.all(6),
-                  decoration: BoxDecoration(
-                    gradient: AppColors.primaryGradient,
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(Icons.auto_awesome_rounded,
-                      color: Colors.black, size: 14),
-                ),
-              ],
-              Flexible(
-                child: Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                  decoration: BoxDecoration(
-                    color: message.isUser ? AppColors.primary : Colors.white,
-                    borderRadius: BorderRadius.only(
-                      topLeft: const Radius.circular(16),
-                      topRight: const Radius.circular(16),
-                      bottomLeft: Radius.circular(message.isUser ? 16 : 0),
-                      bottomRight: Radius.circular(message.isUser ? 0 : 16),
-                    ),
-                    border: message.isUser
-                        ? null
-                        : Border.all(
-                            color: const Color(0xFFE2E8F0), width: 1.2),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.03),
-                        blurRadius: 4,
-                        offset: const Offset(0, 2),
-                      ),
-                    ],
-                  ),
-                  child: _buildMessageText(message.text, message.isUser),
-                ),
-              ),
-            ],
-          ),
-          if (message.customWidget != null) ...[
-            Padding(
-              padding: const EdgeInsets.only(left: 36.0),
-              child: message.customWidget!,
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      body: SafeArea(
-        child: Column(
-          children: [
-            Padding(
-              padding: const EdgeInsets.symmetric(
-                  horizontal: AppSpacing.lg, vertical: AppSpacing.sm),
-              child: Container(
-                height: 80,
-                decoration: BoxDecoration(
-                  borderRadius: AppRadius.lgBorder,
-                  boxShadow: AppShadows.card,
-                ),
-                child: ClipRRect(
-                  borderRadius: AppRadius.lgBorder,
-                  child: Stack(
-                    children: [
-                      Positioned.fill(
-                        child: Image.network(
-                          _movingHero,
-                          fit: BoxFit.cover,
-                        ),
-                      ),
-                      Container(
-                        decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            colors: [
-                              Colors.black.withOpacity(0.92),
-                              Colors.black.withOpacity(0.4),
-                            ],
-                          ),
-                        ),
-                      ),
-                      Padding(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 20, vertical: 16),
-                        child: Row(
-                          children: [
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Text(
-                                    'CREATE A PREMIUM TASK',
-                                    style: TextStyle(
-                                      fontSize: 10,
-                                      fontWeight: FontWeight.w900,
-                                      color: AppColors.primary,
-                                      letterSpacing: 0.5,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 2),
-                                  Text(
-                                    'AI Chat Brief',
-                                    style: context.type.titleLarge?.copyWith(
-                                      fontWeight: FontWeight.w900,
-                                      color: Colors.white,
-                                      letterSpacing: -0.4,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-            Expanded(
-              child: ListView.builder(
-                controller: _scrollController,
-                padding: const EdgeInsets.symmetric(
-                    horizontal: AppSpacing.lg, vertical: AppSpacing.md),
-                physics: const BouncingScrollPhysics(),
-                itemCount: _messages.length + (_isTyping ? 1 : 0),
-                itemBuilder: (context, index) {
-                  if (index == _messages.length) {
-                    return const Padding(
-                      padding: EdgeInsets.symmetric(vertical: 8),
-                      child: Row(
-                        children: [
-                          AiTypingIndicator(
-                            backgroundColor: Colors.white,
-                            borderColor: Color(0xFFE2E8F0),
-                          ),
-                        ],
-                      ),
-                    );
-                  }
-
-                  final message = _messages[index];
-                  return _buildMessageBubble(message);
-                },
-              ),
-            ),
-            Container(
-              padding: const EdgeInsets.all(AppSpacing.md),
-              decoration: BoxDecoration(
-                color: AppColors.surface,
-                border:
-                    Border(top: BorderSide(color: AppColors.border, width: 1)),
-              ),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: TextField(
-                      controller: _inputController,
-                      style: const TextStyle(
-                          fontWeight: FontWeight.w600, fontSize: 14),
-                      decoration: InputDecoration(
-                        hintText: 'Type your task details here...',
-                        contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 16, vertical: 12),
-                        border: OutlineInputBorder(
-                          borderRadius: AppRadius.mdBorder,
-                          borderSide: BorderSide(color: AppColors.border),
-                        ),
-                        focusedBorder: OutlineInputBorder(
-                          borderRadius: AppRadius.mdBorder,
-                          borderSide: BorderSide(color: AppColors.primary),
-                        ),
-                      ),
-                      onSubmitted: _sendMessage,
-                    ),
-                  ),
-                  const SizedBox(width: AppSpacing.sm),
-                  Container(
-                    decoration: BoxDecoration(
-                      gradient: AppColors.primaryGradient,
-                      shape: BoxShape.circle,
-                    ),
-                    child: IconButton(
-                      icon: const Icon(Icons.send_rounded, color: Colors.black),
-                      onPressed: () => _sendMessage(_inputController.text),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
 }
 
 class MatchingScreen extends StatelessWidget {
