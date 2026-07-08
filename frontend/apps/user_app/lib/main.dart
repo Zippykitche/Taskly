@@ -446,7 +446,7 @@ class _UserShellState extends State<UserShell> {
           ),
         ),
       ),
-      floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
+      floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
       bottomNavigationBar: TasklyBottomNav(
         currentIndex: index,
         onTap: (value) => setState(() => index = value),
@@ -481,6 +481,9 @@ class _HomeAiBriefCard extends StatelessWidget {
               category.contains('baby') ||
               category.contains('errand')) &&
           (skill.contains('child') || skill.contains('errand'))) return true;
+      if (category.contains('mov') && skill.contains('mov')) return true;
+      if (category.contains('cook') && skill.contains('chef')) return true;
+      if (category.contains('laund') && skill.contains('laund')) return true;
       return false;
     }).toList();
 
@@ -657,9 +660,46 @@ class _HomeScreenState extends State<HomeScreen> {
   AiTaskPreview? preview;
   bool loading = false;
 
-  Future<void> _askAi(String value) async {
+  final _homeScrollController = ScrollController();
+  final _featuredServicesKey = GlobalKey();
+
+  final _serviceInputController = TextEditingController();
+  final _locationInputController = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    _locationInputController.text =
+        currentUserNotifier.value?.location ?? 'Nairobi, Kenya';
+  }
+
+  @override
+  void dispose() {
+    _homeScrollController.dispose();
+    _serviceInputController.dispose();
+    _locationInputController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _askAi(String service, String location) async {
     setState(() => loading = true);
-    final result = await ai.generateTaskPreview(value);
+
+    // Update logged in user location dynamically
+    if (currentUserNotifier.value != null) {
+      final user = currentUserNotifier.value!;
+      currentUserNotifier.value = TasklyUser(
+        name: user.name,
+        email: user.email,
+        password: user.password,
+        initials: user.initials,
+        location: location,
+        rating: user.rating,
+        tasksCount: user.tasksCount,
+        savedCount: user.savedCount,
+      );
+    }
+
+    final result = await ai.generateTaskPreview(service);
     if (mounted) {
       setState(() {
         preview = result;
@@ -674,6 +714,7 @@ class _HomeScreenState extends State<HomeScreen> {
       body: SafeArea(
         bottom: false,
         child: CustomScrollView(
+          controller: _homeScrollController,
           physics: const BouncingScrollPhysics(),
           slivers: [
             SliverToBoxAdapter(
@@ -853,7 +894,15 @@ class _HomeScreenState extends State<HomeScreen> {
                                             label: 'Explore now',
                                             icon: AppIcons.search,
                                             compact: true,
-                                            onPressed: () {},
+                                            onPressed: () {
+                                              Scrollable.ensureVisible(
+                                                _featuredServicesKey
+                                                    .currentContext!,
+                                                duration: const Duration(
+                                                    milliseconds: 500),
+                                                curve: Curves.easeInOut,
+                                              );
+                                            },
                                           ),
                                         ),
                                       ],
@@ -868,9 +917,59 @@ class _HomeScreenState extends State<HomeScreen> {
                       ),
                     ),
                     const SizedBox(height: AppSpacing.lg),
-                    TasklySearchBar(
-                      hint: 'What do you need help with today?',
-                      onSubmitted: _askAi,
+                    Container(
+                      padding: const EdgeInsets.all(AppSpacing.md),
+                      decoration: BoxDecoration(
+                        color: AppColors.card,
+                        borderRadius: AppRadius.lgBorder,
+                        border: Border.all(color: AppColors.border, width: 1.2),
+                      ),
+                      child: Column(
+                        children: [
+                          TextField(
+                            controller: _serviceInputController,
+                            style: const TextStyle(
+                                fontWeight: FontWeight.w600, fontSize: 14.5),
+                            decoration: const InputDecoration(
+                              labelText: 'What do you need help with today?',
+                              prefixIcon: Icon(AppIcons.search, size: 20),
+                            ),
+                          ),
+                          const SizedBox(height: AppSpacing.md),
+                          TextField(
+                            controller: _locationInputController,
+                            style: const TextStyle(
+                                fontWeight: FontWeight.w600, fontSize: 14.5),
+                            decoration: const InputDecoration(
+                              labelText: 'Your exact location',
+                              prefixIcon:
+                                  Icon(Icons.location_on_rounded, size: 20),
+                            ),
+                          ),
+                          const SizedBox(height: AppSpacing.md),
+                          TasklyButton(
+                            label: 'Ask Taskly AI',
+                            icon: AppIcons.ai,
+                            onPressed: () {
+                              final service =
+                                  _serviceInputController.text.trim();
+                              final location =
+                                  _locationInputController.text.trim();
+                              if (service.isNotEmpty && location.isNotEmpty) {
+                                _askAi(service, location);
+                              } else {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text(
+                                        'Please enter both your task and exact location.'),
+                                    backgroundColor: Colors.redAccent,
+                                  ),
+                                );
+                              }
+                            },
+                          ),
+                        ],
+                      ),
                     ),
                     const SizedBox(height: AppSpacing.sm),
                     SingleChildScrollView(
@@ -899,7 +998,16 @@ class _HomeScreenState extends State<HomeScreen> {
                                   ],
                                 ),
                                 selected: false,
-                                onSelected: (_) => _askAi(chip),
+                                onSelected: (_) {
+                                  _serviceInputController.text = chip;
+                                  final location =
+                                      _locationInputController.text.trim();
+                                  _askAi(
+                                      chip,
+                                      location.isNotEmpty
+                                          ? location
+                                          : 'Nairobi, Kenya');
+                                },
                               ),
                             ),
                         ],
@@ -918,6 +1026,7 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
             SliverToBoxAdapter(
               child: _SectionTitle(
+                key: _featuredServicesKey,
                 title: 'Featured services',
                 action: 'See all',
                 onTap: () {},
@@ -2005,6 +2114,7 @@ class AiAssistantScreen extends StatelessWidget {
 
 class _SectionTitle extends StatelessWidget {
   const _SectionTitle({
+    super.key,
     required this.title,
     required this.action,
     required this.onTap,
@@ -2874,7 +2984,13 @@ class _PremiumTaskerCardState extends State<PremiumTaskerCard> {
                       _MetaItem(
                           text:
                               '${widget.tasker.rating.toStringAsFixed(2)} rating'),
-                      _MetaItem(text: widget.tasker.distance),
+                      _MetaItem(
+                        text: currentUserNotifier.value?.location != null &&
+                                currentUserNotifier.value!.location !=
+                                    'Nairobi, Kenya'
+                            ? '${widget.tasker.distance} from ${currentUserNotifier.value!.location.split(',').first}'
+                            : widget.tasker.distance,
+                      ),
                     ],
                   ),
                   const SizedBox(height: AppSpacing.md),

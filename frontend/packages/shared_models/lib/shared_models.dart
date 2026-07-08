@@ -170,10 +170,49 @@ const _aishaPatel = TaskerProfile(
   verified: true,
 );
 
+const _johnDoe = TaskerProfile(
+  name: 'John Doe',
+  avatar: 'JD',
+  skill: 'Professional moving & logistics',
+  rating: 4.87,
+  distance: '1.5 mi',
+  matchScore: 95,
+  completionRate: 98,
+  reviews: 142,
+  verified: true,
+);
+
+const _chefGrace = TaskerProfile(
+  name: 'Chef Grace',
+  avatar: 'CG',
+  skill: 'Private chef and meal prep',
+  rating: 4.95,
+  distance: '2.3 mi',
+  matchScore: 96,
+  completionRate: 99,
+  reviews: 89,
+  verified: true,
+);
+
+const _maryAtieno = TaskerProfile(
+  name: 'Mary Atieno',
+  avatar: 'MA',
+  skill: 'Laundry and home organization',
+  rating: 4.89,
+  distance: '0.6 mi',
+  matchScore: 93,
+  completionRate: 95,
+  reviews: 120,
+  verified: true,
+);
+
 const taskers = [
   _mayaJohnson,
   _danielKim,
   _aishaPatel,
+  _johnDoe,
+  _chefGrace,
+  _maryAtieno,
 ];
 
 const demoTasks = [
