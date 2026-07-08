@@ -12,6 +12,9 @@ const _movingHero = 'public/images/movers.jpg';
 const _babysittingHero = 'public/images/babysitter.jpg';
 const _deliveryHero = 'public/images/delivery.jpg';
 
+final ValueNotifier<TasklyUser?> currentUserNotifier =
+    ValueNotifier<TasklyUser?>(null);
+
 void main() => runApp(const TasklyUserApp());
 
 class TasklyUserApp extends StatelessWidget {
@@ -135,6 +138,20 @@ class AuthScreen extends StatefulWidget {
 class _AuthScreenState extends State<AuthScreen> {
   bool register = false;
 
+  final _nameController = TextEditingController();
+  final _emailController = TextEditingController();
+  final _phoneController = TextEditingController();
+  final _passwordController = TextEditingController();
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _emailController.dispose();
+    _phoneController.dispose();
+    _passwordController.dispose();
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -214,35 +231,114 @@ class _AuthScreenState extends State<AuthScreen> {
               child: Column(
                 children: [
                   if (register) ...[
-                    const _InputField(
-                        label: 'Full name', icon: Icons.person_outline_rounded),
+                    _InputField(
+                      label: 'Full name',
+                      icon: Icons.person_outline_rounded,
+                      controller: _nameController,
+                    ),
                     const SizedBox(height: AppSpacing.md),
                   ],
-                  const _InputField(
-                      label: 'Email', icon: Icons.alternate_email_rounded),
+                  _InputField(
+                    label: 'Email',
+                    icon: Icons.alternate_email_rounded,
+                    controller: _emailController,
+                  ),
                   const SizedBox(height: AppSpacing.md),
                   if (register) ...[
-                    const _InputField(
-                        label: 'Phone number',
-                        icon: Icons.phone_android_rounded),
+                    _InputField(
+                      label: 'Phone number',
+                      icon: Icons.phone_android_rounded,
+                      controller: _phoneController,
+                    ),
                     const SizedBox(height: AppSpacing.md),
                   ],
-                  const _InputField(
-                      label: 'Password',
-                      obscure: true,
-                      icon: Icons.lock_outline_rounded),
+                  _InputField(
+                    label: 'Password',
+                    obscure: true,
+                    icon: Icons.lock_outline_rounded,
+                    controller: _passwordController,
+                  ),
                   const SizedBox(height: AppSpacing.lg),
                   TasklyButton(
                     label: register ? 'Create account' : 'Log in',
                     icon: AppIcons.home,
-                    onPressed: () => Navigator.of(context).pushReplacement(
-                      PageRouteBuilder(
-                        pageBuilder: (_, __, ___) => const UserShell(),
-                        transitionsBuilder: (_, animation, __, child) =>
-                            FadeTransition(opacity: animation, child: child),
-                        transitionDuration: AppAnimations.medium,
-                      ),
-                    ),
+                    onPressed: () {
+                      final email = _emailController.text.trim();
+                      final password = _passwordController.text.trim();
+
+                      if (email.isEmpty || password.isEmpty) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Please fill in all fields.'),
+                            backgroundColor: Colors.redAccent,
+                          ),
+                        );
+                        return;
+                      }
+
+                      if (register) {
+                        final name = _nameController.text.trim();
+                        final phone = _phoneController.text.trim();
+                        if (name.isEmpty || phone.isEmpty) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('Please fill in all fields.'),
+                              backgroundColor: Colors.redAccent,
+                            ),
+                          );
+                          return;
+                        }
+
+                        final initials = name
+                            .split(' ')
+                            .map((e) => e.isNotEmpty ? e[0] : '')
+                            .take(2)
+                            .join()
+                            .toUpperCase();
+                        final newUser = TasklyUser(
+                          name: name,
+                          email: email,
+                          password: password,
+                          initials: initials.isNotEmpty ? initials : 'U',
+                          location: 'Nairobi, Kenya',
+                          rating: 5.0,
+                          tasksCount: 0,
+                          savedCount: 0,
+                        );
+
+                        currentUserNotifier.value = newUser;
+                      } else {
+                        // Check login credentials against mockUsers
+                        final matchedUser = mockUsers.firstWhere(
+                          (u) =>
+                              u.email.toLowerCase() == email.toLowerCase() &&
+                              u.password == password,
+                          orElse: () => null as dynamic,
+                        );
+
+                        if (matchedUser == null) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text(
+                                  'Invalid email or password. Hint: zipporah@taskly.com / password123'),
+                              backgroundColor: Colors.redAccent,
+                            ),
+                          );
+                          return;
+                        }
+
+                        currentUserNotifier.value = matchedUser;
+                      }
+
+                      Navigator.of(context).pushReplacement(
+                        PageRouteBuilder(
+                          pageBuilder: (_, __, ___) => const UserShell(),
+                          transitionsBuilder: (_, animation, __, child) =>
+                              FadeTransition(opacity: animation, child: child),
+                          transitionDuration: AppAnimations.medium,
+                        ),
+                      );
+                    },
                   ),
                   SizedBox(height: AppSpacing.md),
                   Row(
@@ -589,15 +685,18 @@ class _HomeScreenState extends State<HomeScreen> {
                   children: [
                     Row(
                       children: [
-                        const TasklyAvatar(
-                            initials: 'ZW', size: 52, verified: true),
+                        TasklyAvatar(
+                            initials:
+                                currentUserNotifier.value?.initials ?? 'U',
+                            size: 52,
+                            verified: true),
                         const SizedBox(width: AppSpacing.sm),
                         Expanded(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                'Good Morning, Zipporah 👋',
+                                'Good Morning, ${currentUserNotifier.value?.name.split(' ').first ?? 'User'} 👋',
                                 style: context.type.titleLarge?.copyWith(
                                   fontWeight: FontWeight.w900,
                                   letterSpacing: -0.2,
@@ -610,7 +709,8 @@ class _HomeScreenState extends State<HomeScreen> {
                                       color: AppColors.primary, size: 14),
                                   SizedBox(width: 4),
                                   Text(
-                                    'Nairobi, Kenya',
+                                    currentUserNotifier.value?.location ??
+                                        'Nairobi, Kenya',
                                     style: TextStyle(
                                       color: AppColors.textSecondary,
                                       fontWeight: FontWeight.w700,
@@ -1040,7 +1140,7 @@ class MatchingScreen extends StatelessWidget {
                         Text(
                           'Ranked by rating, distance, availability, and completion history.',
                           style: TextStyle(
-                            color: AppColors.textSecondary,
+                            color: Colors.white,
                             fontWeight: FontWeight.w600,
                             fontSize: 13,
                           ),
@@ -1485,16 +1585,16 @@ class MessagesScreen extends StatelessWidget {
             child: ListView(
               padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
               physics: const BouncingScrollPhysics(),
-              children: const [
+              children: [
                 AiChatBubble(
                   text:
-                      'Hi Olivia, I will arrive in 12 minutes and bring eco-friendly supplies.',
+                      'Hi ${currentUserNotifier.value?.name.split(' ').first ?? 'User'}, I will arrive in 12 minutes and bring eco-friendly supplies.',
                 ),
-                AiChatBubble(
+                const AiChatBubble(
                   text: 'Great, the access code is 4821.',
                   fromAi: false,
                 ),
-                AiChatBubble(
+                const AiChatBubble(
                   text: 'Perfect, thank you.',
                   fromAi: true,
                 ),
@@ -1708,10 +1808,13 @@ class UserProfileScreen extends StatelessWidget {
             gradient: AppColors.heroGradient,
             child: Column(
               children: [
-                const TasklyAvatar(initials: 'ZW', size: 92, verified: true),
+                TasklyAvatar(
+                    initials: currentUserNotifier.value?.initials ?? 'U',
+                    size: 92,
+                    verified: true),
                 const SizedBox(height: AppSpacing.md),
                 Text(
-                  'Zipporah Wambui',
+                  currentUserNotifier.value?.name ?? 'User Name',
                   style: context.type.headlineSmall?.copyWith(
                     fontWeight: FontWeight.w900,
                     letterSpacing: -0.4,
@@ -1725,18 +1828,30 @@ class UserProfileScreen extends StatelessWidget {
                       fontWeight: FontWeight.w700),
                 ),
                 const SizedBox(height: AppSpacing.lg),
-                const Row(
+                Row(
                   children: [
                     Expanded(
-                      child: _ProfileStat(value: '4.96', label: 'Rating'),
+                      child: _ProfileStat(
+                          value: currentUserNotifier.value?.rating
+                                  .toStringAsFixed(2) ??
+                              '5.00',
+                          label: 'Rating'),
                     ),
-                    SizedBox(width: AppSpacing.sm),
+                    const SizedBox(width: AppSpacing.sm),
                     Expanded(
-                      child: _ProfileStat(value: '32', label: 'Tasks'),
+                      child: _ProfileStat(
+                          value: currentUserNotifier.value?.tasksCount
+                                  .toString() ??
+                              '0',
+                          label: 'Tasks'),
                     ),
-                    SizedBox(width: AppSpacing.sm),
+                    const SizedBox(width: AppSpacing.sm),
                     Expanded(
-                      child: _ProfileStat(value: '8', label: 'Saved'),
+                      child: _ProfileStat(
+                          value: currentUserNotifier.value?.savedCount
+                                  .toString() ??
+                              '0',
+                          label: 'Saved'),
                     ),
                   ],
                 ),
@@ -1765,6 +1880,17 @@ class UserProfileScreen extends StatelessWidget {
           const _ProfileTile(
             icon: Icons.settings_rounded,
             title: 'Settings',
+          ),
+          _ProfileTile(
+            icon: Icons.logout_rounded,
+            title: 'Log out',
+            onTap: () {
+              currentUserNotifier.value = null;
+              Navigator.of(context).pushAndRemoveUntil(
+                MaterialPageRoute(builder: (_) => const AuthScreen()),
+                (route) => false,
+              );
+            },
           ),
         ],
       ),
@@ -1806,7 +1932,7 @@ class AiAssistantScreen extends StatelessWidget {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              'Hi Zipporah 👋',
+                              'Hi ${currentUserNotifier.value?.name.split(' ').first ?? 'User'} 👋',
                               style: context.type.headlineSmall?.copyWith(
                                 fontWeight: FontWeight.w900,
                                 letterSpacing: -0.4,
@@ -1921,16 +2047,19 @@ class _InputField extends StatelessWidget {
     this.minLines = 1,
     this.maxLines,
     this.icon,
+    this.controller,
   });
   final String label;
   final bool obscure;
   final int minLines;
   final int? maxLines;
   final IconData? icon;
+  final TextEditingController? controller;
 
   @override
   Widget build(BuildContext context) {
     return TextField(
+      controller: controller,
       obscureText: obscure,
       minLines: obscure ? 1 : minLines,
       maxLines: obscure ? 1 : maxLines,

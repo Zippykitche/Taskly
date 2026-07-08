@@ -237,3 +237,49 @@ const earnings = [
   EarningPoint('Sat', 310),
   EarningPoint('Sun', 160),
 ];
+
+class TasklyUser {
+  const TasklyUser({
+    required this.name,
+    required this.email,
+    required this.password,
+    required this.initials,
+    required this.location,
+    required this.rating,
+    required this.tasksCount,
+    required this.savedCount,
+  });
+
+  final String name;
+  final String email;
+  final String password;
+  final String initials;
+  final String location;
+  final double rating;
+  final int tasksCount;
+  final int savedCount;
+}
+
+const mockUsers = [
+  TasklyUser(
+    name: 'Zipporah Wambui',
+    email: 'zipporah@taskly.com',
+    password: 'password123',
+    initials: 'ZW',
+    location: 'Nairobi, Kenya',
+    rating: 4.96,
+    tasksCount: 32,
+    savedCount: 8,
+  ),
+  TasklyUser(
+    name: 'Olivia Rodriguez',
+    email: 'olivia@taskly.com',
+    password: 'password123',
+    initials: 'OR',
+    location: 'Mombasa, Kenya',
+    rating: 4.85,
+    tasksCount: 12,
+    savedCount: 3,
+  ),
+];
+
