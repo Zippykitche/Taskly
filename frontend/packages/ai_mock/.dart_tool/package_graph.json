@@ -1,0 +1,21 @@
+{
+  "roots": [
+    "ai_mock"
+  ],
+  "packages": [
+    {
+      "name": "ai_mock",
+      "version": "0.1.0",
+      "dependencies": [
+        "shared_models"
+      ],
+      "devDependencies": []
+    },
+    {
+      "name": "shared_models",
+      "version": "0.1.0",
+      "dependencies": []
+    }
+  ],
+  "configVersion": 1
+}

@@ -1,0 +1,11 @@
+name: taskly
+packages:
+  - apps/**
+  - packages/**
+
+command:
+  bootstrap:
+    usePubspecOverrides: true
+
+ide:
+  intellij: false
