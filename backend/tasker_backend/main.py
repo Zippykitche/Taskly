@@ -127,7 +127,6 @@ async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = De
 # Add rate limiting middleware
 @app.middleware("http")
 async def rate_limit_middleware_config(request: Request, call_next):
-async def rate_limit_middleware_config(request, call_next):
     from shared.security.rate_limiter import rate_limit_middleware
     return await rate_limit_middleware(request, call_next)
 
@@ -224,12 +223,7 @@ async def register(user_data: UserRegister, db: Session = Depends(get_db)):
 
 @app.post("/auth/login", response_model=Token)
 async def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
-    user = db.query(User).filter(User.phone_number == form_data.username).first()
-    if not user or user.password != form_data.password:
-        raise HTTPException(status_code=401, detail="Invalid credentials")
     try:
-        user = db.query(User).filter(User.phone_number == form_data.username).first()
-        
         user = db.query(User).filter(User.phone_number == form_data.username, User.user_type == 'tasker').first()
 
         if not user or not PasswordSecurity.verify_password(form_data.password, user.password):
@@ -240,20 +234,17 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = 
                 details={"reason": "Invalid credentials"}
             )
             raise HTTPException(status_code=401, detail="Invalid credentials")
-        
+
         access_token = JWTSecurity.create_access_token(data={"sub": form_data.username})
-        
+
         AuditLogger.log_event(
             event_type="LOGIN",
             user_id=user.id,
             user_email=user.email,
             status="SUCCESS"
         )
-        
+
         return {"access_token": access_token, "token_type": "bearer"}
-    
-    access_token = create_access_token(data={"sub": form_data.username})
-    return {"access_token": access_token, "token_type": "bearer"}
     except HTTPException:
         raise
     except Exception as e:
@@ -489,8 +480,7 @@ async def verify_work_completion(job_id: int, verify_data: VerifyWork,
             "reason": verification["reason"],
             "method": verification["method"],
             "match_percentage": verification.get("match_percentage", 0),
-            "status": "completed" if verification["approved"] else "pending"
-            "status": "pending_approval"
+            "status": "completed" if verification["approved"] else "pending_approval"
         }
     except Exception as e:
         db.rollback()

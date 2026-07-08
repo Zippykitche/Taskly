@@ -8,6 +8,7 @@ from datetime import datetime
 import os
 
 PLATFORM_COMMISSION = 0.15  # 15%
+MIN_ESCROW_AMOUNT = 100  # cents
 
 
 class EscrowService:
@@ -26,6 +27,9 @@ class EscrowService:
         Money goes into escrow
         """
         
+        if total_amount < MIN_ESCROW_AMOUNT:
+            raise ValueError("Escrow amount is too small")
+
         # Calculate split
         platform_cut = int(total_amount * PLATFORM_COMMISSION)
         tasker_earnings = total_amount - platform_cut
@@ -49,9 +53,13 @@ class EscrowService:
         callback_url = f"{os.getenv('API_BASE_URL')}/payments/mpesa/callback"
         
         try:
+            normalized_phone = ''.join(ch for ch in phone_number if ch.isdigit())
+            if not normalized_phone.startswith(("254", "0", "1")):
+                raise ValueError("Unsupported phone number for M-Pesa")
+
             mpesa_response = await mpesa_client.stk_push(
-                phone_number=phone_number,
-                amount=total_amount // 100,  # Convert cents to KES
+                phone_number=normalized_phone,
+                amount=max(1, total_amount // 100),  # Convert cents to KES
                 account_reference=f"Job-{job_id}",
                 transaction_desc=f"Payment for Taskly Job #{job_id}",
                 callback_url=callback_url
@@ -84,8 +92,11 @@ class EscrowService:
         if not transaction:
             raise Exception("Transaction not found")
         
+        if not mpesa_receipt or len(mpesa_receipt.strip()) < 4:
+            raise ValueError("Invalid M-Pesa receipt")
+
         transaction.status = TransactionStatus.ESCROWED
-        transaction.mpesa_receipt_number = mpesa_receipt
+        transaction.mpesa_receipt_number = mpesa_receipt.strip()
         transaction.paid_at = datetime.utcnow()
         transaction.escrowed_at = datetime.utcnow()
         
@@ -128,7 +139,7 @@ class EscrowService:
             raise Exception("Transaction not found")
         
         if transaction.status != TransactionStatus.ESCROWED:
-            raise Exception(f"Cannot release payment in status: {transaction.status.value}")
+            raise Exception(f"Cannot release payment in status: {getattr(transaction.status, 'value', transaction.status)}")
         
         # Update transaction
         transaction.status = TransactionStatus.RELEASED
@@ -136,6 +147,11 @@ class EscrowService:
         
         # Move money from pending to available
         wallet = db.query(Wallet).filter_by(tasker_id=transaction.tasker_id).first()
+        if not wallet:
+            wallet = Wallet(tasker_id=transaction.tasker_id)
+            db.add(wallet)
+        if wallet.pending_balance < transaction.tasker_amount:
+            raise ValueError("Insufficient escrow balance to release funds")
         wallet.pending_balance -= transaction.tasker_amount
         wallet.available_balance += transaction.tasker_amount
         wallet.total_earned += transaction.tasker_amount
@@ -176,7 +192,7 @@ class EscrowService:
             raise Exception("Transaction not found")
         
         if transaction.status != TransactionStatus.ESCROWED:
-            raise Exception(f"Cannot refund payment in status: {transaction.status.value}")
+            raise Exception(f"Cannot refund payment in status: {getattr(transaction.status, 'value', transaction.status)}")
         
         # Update transaction
         transaction.status = TransactionStatus.REFUNDED
@@ -184,6 +200,11 @@ class EscrowService:
         
         # Remove from tasker's pending balance
         wallet = db.query(Wallet).filter_by(tasker_id=transaction.tasker_id).first()
+        if not wallet:
+            wallet = Wallet(tasker_id=transaction.tasker_id)
+            db.add(wallet)
+        if wallet.pending_balance < transaction.tasker_amount:
+            raise ValueError("Insufficient escrow balance to refund funds")
         wallet.pending_balance -= transaction.tasker_amount
         
         # Update job

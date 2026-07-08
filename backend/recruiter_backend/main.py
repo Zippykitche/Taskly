@@ -20,7 +20,6 @@ from shared.models.db_models import User, Job, Application, Transaction, Wallet,
 # Import services
 from shared.services.email_service import EmailService
 from shared.services.mpesa_service import MpesaService
-from shared.services.claude_ai import ClaudeAI # This is now deprecated by taskly_ai
 from shared.services.mpesa_callback import MpesaCallbackHandler
 
 # Security Imports
@@ -151,6 +150,11 @@ async def register(user_data: UserRegister, db: Session = Depends(get_db)):
             raise HTTPException(status_code=400, detail="Invalid email format")
         if not InputValidation.validate_phone(user_data.phone_number):
             raise HTTPException(status_code=400, detail="Invalid phone number format")
+
+        user_data.phone_number = InputValidation.sanitize_string(user_data.phone_number)
+        user_data.full_name = InputValidation.sanitize_string(user_data.full_name)
+        user_data.location_city = InputValidation.sanitize_string(user_data.location_city)
+        user_data.location_area = InputValidation.sanitize_string(user_data.location_area)
 
         valid, message = PasswordSecurity.validate_password_strength(user_data.password)
         if not valid:

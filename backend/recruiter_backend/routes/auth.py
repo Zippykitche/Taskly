@@ -10,6 +10,8 @@ from sqlalchemy.orm import Session
 from dotenv import load_dotenv
 from shared.database import get_db
 from shared.models.user import Recruiter
+from shared.security.password_security import PasswordSecurity, InputValidation
+from shared.security.jwt_security import JWTSecurity
 
 load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), "..", ".env"))
 
@@ -45,21 +47,15 @@ class Token(BaseModel):
 
 
 def verify_password(plain_password, hashed_password):
-    return pwd_context.verify(plain_password, hashed_password)
+    return PasswordSecurity.verify_password(plain_password, hashed_password)
 
 
 def get_password_hash(password):
-    return pwd_context.hash(password)
+    return PasswordSecurity.hash_password(password)
 
 
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
-    to_encode = data.copy()
-    if expires_delta:
-        expire = datetime.utcnow() + expires_delta
-    else:
-        expire = datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
-    to_encode.update({"exp": expire})
-    return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+    return JWTSecurity.create_access_token(data, expires_delta=expires_delta)
 
 
 def get_recruiter_by_phone(db: Session, phone: str):
@@ -84,7 +80,7 @@ async def get_current_recruiter(token: str = Depends(oauth2_scheme), db: Session
         headers={"WWW-Authenticate": "Bearer"},
     )
     try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        payload = JWTSecurity.verify_token(token)
         recruiter_id: int = int(payload.get("sub"))
         if recruiter_id is None:
             raise credentials_exception
@@ -98,6 +94,13 @@ async def get_current_recruiter(token: str = Depends(oauth2_scheme), db: Session
 
 @router.post("/register", response_model=RecruiterOut)
 def register(recruiter_in: RecruiterCreate, db: Session = Depends(get_db)):
+    if not InputValidation.validate_phone(recruiter_in.phone_number):
+        raise HTTPException(status_code=400, detail="Invalid phone number")
+    if not InputValidation.validate_email(recruiter_in.email or ""):
+        raise HTTPException(status_code=400, detail="Invalid email")
+    valid, message = PasswordSecurity.validate_password_strength(recruiter_in.password)
+    if not valid:
+        raise HTTPException(status_code=400, detail=message)
     if get_recruiter_by_phone(db, recruiter_in.phone_number):
         raise HTTPException(status_code=400, detail="Phone number already registered")
     if recruiter_in.email and db.query(Recruiter).filter(Recruiter.email == recruiter_in.email).first():
