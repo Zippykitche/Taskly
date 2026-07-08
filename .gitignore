@@ -1,12 +1,21 @@
-# Python
+# Secrets
+.env
+.env.local
+.env.*.local
+*.key
+*.pem
+
+# Sensitive files
+audit_logs/
+receipts/
+reports/
+
+# Python & Dependencies
 __pycache__/
 *.pyc
 *.pyo
 *.pyd
 .Python
-*.so
-*.egg
-*.egg-info/
 dist/
 build/
 
@@ -14,10 +23,6 @@ build/
 venv/
 env/
 ENV/
-
-# Environment variables
-.env
-.env.local
 
 # Database
 *.db

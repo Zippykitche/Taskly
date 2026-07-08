@@ -1,6 +1,7 @@
 import sys
 import os
-from fastapi import FastAPI, Depends, HTTPException, status
+from fastapi import FastAPI, Depends, HTTPException, status, Request
+from fastapi import FastAPI, Depends, HTTPException, status, Request
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from pydantic import BaseModel
 import jwt
@@ -8,8 +9,9 @@ import jwt
 # Add project root to path to allow imports from shared
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-from datetime import datetime, timedelta
+from datetime import datetime
 from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import text
 from dotenv import load_dotenv
 
@@ -23,20 +25,36 @@ from shared.services.email_service import EmailService
 # from shared.services.mpesa_service import MpesaService
 from shared.services.ratings_service import RatingsService
 
+# At the TOP of file, after imports:
+from shared.security.rate_limiter import rate_limiter, RateLimitConfig
+from shared.security.password_security import PasswordSecurity, InputValidation
+from shared.security.jwt_security import JWTSecurity
+from shared.security.audit_logger import AuditLogger
+from shared.security.secrets_manager import SecretsManager
+from shared.security.cors_security import configure_cors
+
 load_dotenv()
 
 app = FastAPI(title="Taskly Tasker Backend")
 
-# Create all tables on startup
-Base.metadata.create_all(bind=engine)
+# Base.metadata.create_all(bind=engine) # This is better handled by Alembic
+# AFTER creating app = FastAPI(...):
+
+# Validate secrets on startup
+try:
+    SecretsManager.validate_required_secrets()
+except ValueError as e:
+    print(f"⚠️  Security Warning: {str(e)}")
+
+# Configure CORS security
+configure_cors(app)
 
 # ========== CONFIG ==========
-SECRET_KEY = os.getenv("JWT_SECRET", "test_secret_key_taskly")
+SECRET_KEY = SecretsManager.get_secret("JWT_SECRET", "test_secret_key_taskly")
 ALGORITHM = "HS256"
 
 # Initialize services
 image_verifier = ImageVerification()
-email_service = EmailService()
 # mpesa_service = MpesaService()
 
 # ========== SCHEMAS ==========
@@ -81,27 +99,18 @@ class FiledDispute(BaseModel):
     reason: str
     description: str
 
-# ========== HELPER FUNCTIONS ==========
-def create_access_token(data: dict, expires_delta=None):
-    to_encode = data.copy()
-    if expires_delta:
-        expire = datetime.utcnow() + expires_delta
-    else:
-        expire = datetime.utcnow() + timedelta(hours=24)
-    to_encode.update({"exp": expire})
-    encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
-    return encoded_jwt
-
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="auth/login")
 
 async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        payload = JWTSecurity.verify_token(token)
         phone = payload.get("sub")
         if phone is None:
             raise HTTPException(status_code=401, detail="Invalid token")
         
         user = db.query(User).filter(User.phone_number == phone).first()
+        user = db.query(User).filter(User.phone_number == phone, User.user_type == 'tasker').first()
         if not user:
             raise HTTPException(status_code=401, detail="User not found")
         
@@ -110,13 +119,42 @@ async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = De
         raise HTTPException(status_code=401, detail="Token expired")
     except:
         raise HTTPException(status_code=401, detail="Invalid token")
+    except jwt.ExpiredSignatureError as e:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(e))
+    except jwt.InvalidTokenError as e:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(e))
+
+# Add rate limiting middleware
+@app.middleware("http")
+async def rate_limit_middleware_config(request: Request, call_next):
+async def rate_limit_middleware_config(request, call_next):
+    from shared.security.rate_limiter import rate_limit_middleware
+    return await rate_limit_middleware(request, call_next)
 
 # ========== AUTH ROUTES ==========
 @app.post("/auth/register")
 async def register(user_data: UserRegister, db: Session = Depends(get_db)):
     try:
+        # Validate input
+        if not InputValidation.validate_email(user_data.email):
+            raise HTTPException(status_code=400, detail="Invalid email")
+        
+        if not InputValidation.validate_phone(user_data.phone_number):
+            raise HTTPException(status_code=400, detail="Invalid phone")
+        
+        # Validate password strength
+        valid, message = PasswordSecurity.validate_password_strength(user_data.password)
+        if not valid:
+            raise HTTPException(status_code=400, detail=message)
+        
         existing = db.query(User).filter(User.phone_number == user_data.phone_number).first()
         if existing:
+            AuditLogger.log_event(
+                event_type="REGISTER",
+                user_email=user_data.email,
+                status="FAILED",
+                details={"reason": "User already exists"}
+            )
             raise HTTPException(status_code=400, detail="User already exists")
         
         new_user = User(
@@ -124,6 +162,10 @@ async def register(user_data: UserRegister, db: Session = Depends(get_db)):
             password=user_data.password,
             full_name=user_data.full_name,
             email=user_data.email,
+            password=PasswordSecurity.hash_password(user_data.password),  # HASHED!
+            full_name=InputValidation.sanitize_string(user_data.full_name),
+            email=user_data.email.lower(),
+            phone_number=user_data.phone_number,
             id_number=user_data.id_number,
             categories=user_data.categories,
             location_city=user_data.location_city,
@@ -134,13 +176,24 @@ async def register(user_data: UserRegister, db: Session = Depends(get_db)):
         db.add(new_user)
         db.flush()
         
+
         # Create wallet
+        # Create wallet for the new tasker
         wallet = Wallet(user_id=new_user.id)
         db.add(wallet)
         
         db.commit()
         db.refresh(new_user)
         
+
+        # Log successful registration
+        AuditLogger.log_event(
+            event_type="REGISTER",
+            user_id=new_user.id,
+            user_email=new_user.email,
+            status="SUCCESS"
+        )
+
         # Send welcome email
         email_service.send_registration_email(
             to_email=new_user.email,
@@ -154,24 +207,69 @@ async def register(user_data: UserRegister, db: Session = Depends(get_db)):
             "full_name": new_user.full_name,
             "message": "Registration successful"
         }
+
+        return {"user_id": new_user.id, "message": "Registration successful"}
+    
+    except HTTPException:
+        raise
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
+        AuditLogger.log_event(
+            event_type="REGISTER",
+            status="ERROR",
+            details={"error": str(e)}
+        )
+        raise HTTPException(status_code=500, detail="Registration error")
 
 @app.post("/auth/login", response_model=Token)
 async def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
     user = db.query(User).filter(User.phone_number == form_data.username).first()
     if not user or user.password != form_data.password:
         raise HTTPException(status_code=401, detail="Invalid credentials")
+    try:
+        user = db.query(User).filter(User.phone_number == form_data.username).first()
+        
+        user = db.query(User).filter(User.phone_number == form_data.username, User.user_type == 'tasker').first()
+
+        if not user or not PasswordSecurity.verify_password(form_data.password, user.password):
+            AuditLogger.log_event(
+                event_type="FAILED_LOGIN",
+                user_email=form_data.username,
+                status="FAILED",
+                details={"reason": "Invalid credentials"}
+            )
+            raise HTTPException(status_code=401, detail="Invalid credentials")
+        
+        access_token = JWTSecurity.create_access_token(data={"sub": form_data.username})
+        
+        AuditLogger.log_event(
+            event_type="LOGIN",
+            user_id=user.id,
+            user_email=user.email,
+            status="SUCCESS"
+        )
+        
+        return {"access_token": access_token, "token_type": "bearer"}
     
     access_token = create_access_token(data={"sub": form_data.username})
     return {"access_token": access_token, "token_type": "bearer"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        AuditLogger.log_event(
+            event_type="LOGIN",
+            status="ERROR",
+            details={"error": str(e)}
+        )
+        raise HTTPException(status_code=500, detail="Login error")
 
 # ========== JOB ROUTES ==========
 @app.get("/jobs/browse")
 async def browse_jobs(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     try:
         jobs = db.query(Job).filter(Job.status == "open").all()
+        jobs = db.query(Job).options(joinedload(Job.recruiter)).filter(Job.status == "open").all()
         return {
             "jobs": [
                 {
@@ -392,6 +490,7 @@ async def verify_work_completion(job_id: int, verify_data: VerifyWork,
             "method": verification["method"],
             "match_percentage": verification.get("match_percentage", 0),
             "status": "completed" if verification["approved"] else "pending"
+            "status": "pending_approval"
         }
     except Exception as e:
         db.rollback()
@@ -423,6 +522,7 @@ async def rate_job(job_id: int, rating_data: AddRating,
                 )
         
         return result
+            return result
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
@@ -465,12 +565,14 @@ async def get_wallet(current_user: User = Depends(get_current_user), db: Session
         wallet = db.query(Wallet).filter(Wallet.user_id == current_user.id).first()
         
         if not wallet:
+            # This should not happen if wallet is created on registration
             wallet = Wallet(user_id=current_user.id)
             db.add(wallet)
             db.commit()
         
         return {
             "balance": wallet.balance,
+            "balance": wallet.available_balance,
             "available_withdrawal": wallet.available_withdrawal,
             "total_earned": wallet.total_earned,
             "currency": "KES",
@@ -481,8 +583,10 @@ async def get_wallet(current_user: User = Depends(get_current_user), db: Session
 
 @app.get("/earnings/transactions")
 async def get_transactions(current_user: User = Depends(get_current_user)):
+async def get_transactions(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     try:
         transactions = db.query(Transaction).filter(Transaction.user_id == current_user.id).order_by(Transaction.created_at.desc()).all()
+        transactions = db.query(Transaction).filter(Transaction.tasker_id == current_user.id).order_by(Transaction.created_at.desc()).all()
         
         return {
             "transactions": [
@@ -493,6 +597,7 @@ async def get_transactions(current_user: User = Depends(get_current_user)):
                     "job_id": t.job_id,
                     "status": t.status,
                     "mpesa_reference": t.mpesa_reference,
+                    "mpesa_reference": t.mpesa_receipt_number,
                     "created_at": t.created_at.isoformat()
                 }
                 for t in transactions
