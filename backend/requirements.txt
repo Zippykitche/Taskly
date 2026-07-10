@@ -1,13 +1,28 @@
-fastapi
-uvicorn[standard]
-sqlalchemy
+# Core Framework
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+python-multipart==0.0.6
+
+# Database
+sqlalchemy==2.0.23
+psycopg2-binary==2.9.9
 alembic
-python-jose[cryptography]
-passlib[bcrypt]
-python-multipart
-httpx
-cloudinary
-psycopg2-binary
+
+# Authentication & Security
+python-jose[cryptography]==3.3.0
+passlib[bcrypt]==1.7.4
 pydantic>=2.13.0
 pydantic-settings
-python-dotenv
+PyJWT==2.8.0
+
+# Environment
+python-dotenv==1.0.0
+
+# External APIs
+httpx==0.25.0
+
+# Storage
+cloudinary==1.36.0
+
+# Real-time & Caching
+redis==5.0.1
