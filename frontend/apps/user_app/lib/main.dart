@@ -49,7 +49,7 @@ class _SplashScreenState extends State<SplashScreen> {
   @override
   void initState() {
     super.initState();
-    Future<void>.delayed(const Duration(milliseconds: 1600), () {
+    Future<void>.delayed(const Duration(milliseconds: 3000), () {
       if (mounted) {
         Navigator.of(context).pushReplacement(
           PageRouteBuilder(
@@ -84,8 +84,8 @@ class _SplashScreenState extends State<SplashScreen> {
                 begin: Alignment.topCenter,
                 end: Alignment.bottomCenter,
                 colors: [
-                  Colors.black.withOpacity(0.2),
-                  Colors.black.withOpacity(0.85),
+                  AppColors.primary.withOpacity(0.25),
+                  AppColors.darkGreen.withOpacity(0.9),
                 ],
               ),
             ),
@@ -105,6 +105,7 @@ class _SplashScreenState extends State<SplashScreen> {
                   Text(
                     'TASKLY AI',
                     style: context.type.displayMedium?.copyWith(
+                      color: Colors.white,
                       letterSpacing: -1.5,
                       fontWeight: FontWeight.w900,
                     ),
@@ -113,7 +114,7 @@ class _SplashScreenState extends State<SplashScreen> {
                   Text(
                     'Premium local help, matched by AI.',
                     style: TextStyle(
-                      color: AppColors.textSecondary,
+                      color: Colors.white.withOpacity(0.85),
                       fontWeight: FontWeight.w600,
                       letterSpacing: 0.2,
                     ),
