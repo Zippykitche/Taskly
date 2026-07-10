@@ -20,6 +20,7 @@ python-dotenv==1.0.0
 
 # External APIs
 httpx==0.25.0
+requests>=2.32.3
 
 # Storage
 cloudinary==1.36.0
