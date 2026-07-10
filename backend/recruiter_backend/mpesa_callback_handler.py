@@ -1,14 +1,14 @@
- import json
- from sqlalchemy.orm import Session
- from shared.models.transaction import Transaction, TransactionStatus, Withdrawal
- from shared.models.job import Job, JobStatus
- from shared.models.user import Wallet, Tasker
- from shared.services.escrow import escrow
- from shared.services.notifications import send_push
- from datetime import datetime
- 
- 
- class MpesaCallbackHandler:
+import json
+from sqlalchemy.orm import Session
+from shared.models.transaction import Transaction, TransactionStatus, Withdrawal
+from shared.models.job import Job, JobStatus
+from shared.models.user import Wallet, Tasker
+from shared.services.escrow import escrow
+from shared.services.notifications import send_push
+from datetime import datetime
+
+
+class MpesaCallbackHandler:
      @staticmethod
      def handle_payment_callback(callback_data: dict, db: Session) -> dict:
          """
@@ -110,4 +110,4 @@
              return {"success": False, "error": str(e)}
  
  
- mpesa_callback_handler = MpesaCallbackHandler()
+mpesa_callback_handler = MpesaCallbackHandler()

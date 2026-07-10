@@ -1,9 +1,29 @@
-# Python
+# Secrets
+.env
+.env.local
+.env.*.local
+*.key
+*.pem
+
+# Sensitive files
+audit_logs/
+receipts/
+reports/
+
+# Python & Dependencies
 __pycache__/
+<<<<<<< HEAD
+*.pyc
+*.pyo
+*.pyd
+.Python
+dist/
+=======
 *.py[cod]
 *$py.class
 *.so
 .Python
+>>>>>>> zippy/main
 build/
 develop-eggs/
 dist/
@@ -29,6 +49,8 @@ ENV/
 .venv/
 pip-selfcheck.json
 
+<<<<<<< HEAD
+=======
 # Pytest / Coverage
 .cache/
 .pytest_cache/
@@ -41,6 +63,7 @@ coverage.xml
 *.cover
 .hypothesis/
 
+>>>>>>> zippy/main
 # Database
 *.db
 *.sqlite3

@@ -22,6 +22,9 @@ class MPesaClient:
             self.base_url = "https://sandbox.safaricom.co.ke"
 
     async def get_access_token(self) -> str:
+        if not self.consumer_key or not self.consumer_secret:
+            raise ValueError("M-Pesa credentials are not configured")
+
         url = f"{self.base_url}/oauth/v1/generate?grant_type=client_credentials"
         credentials = f"{self.consumer_key}:{self.consumer_secret}"
         encoded = base64.b64encode(credentials.encode()).decode()
@@ -42,6 +45,13 @@ class MPesaClient:
         transaction_desc: str,
         callback_url: str,
     ) -> dict:
+        if not self.passkey or not self.business_shortcode:
+            raise ValueError("M-Pesa STK credentials are not configured")
+
+        normalized_phone = ''.join(ch for ch in phone_number if ch.isdigit())
+        if not normalized_phone.startswith(("254", "0", "1")):
+            raise ValueError("Unsupported phone number")
+
         access_token = await self.get_access_token()
         timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
         password = base64.b64encode(
@@ -60,13 +70,13 @@ class MPesaClient:
             "Password": password,
             "Timestamp": timestamp,
             "TransactionType": "CustomerPayBillOnline",
-            "Amount": amount,
-            "PartyA": phone_number,
+            "Amount": max(1, amount),
+            "PartyA": normalized_phone,
             "PartyB": self.business_shortcode,
-            "PhoneNumber": phone_number,
+            "PhoneNumber": normalized_phone,
             "CallBackURL": callback_url,
-            "AccountReference": account_reference,
-            "TransactionDesc": transaction_desc,
+            "AccountReference": account_reference[:20],
+            "TransactionDesc": transaction_desc[:20],
         }
 
         async with httpx.AsyncClient() as client:

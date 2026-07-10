@@ -5,6 +5,8 @@ from .db_models import (
     WorkImage,
     Wallet,
     Transaction,
+    Receipt,
+    DailyReport,
     Base,
 )
 
@@ -15,5 +17,7 @@ __all__ = [
     "WorkImage",
     "Wallet",
     "Transaction",
+    "Receipt",
+    "DailyReport",
     "Base",
 ]

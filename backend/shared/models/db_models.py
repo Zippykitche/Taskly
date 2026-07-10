@@ -43,6 +43,7 @@ class User(Base):
         foreign_keys="Dispute.opened_by_id",
         back_populates="opened_by",
     )
+    receipts = relationship("Receipt", back_populates="user")
 
 
 class Job(Base):
@@ -67,6 +68,7 @@ class Job(Base):
     recruiter = relationship("User", back_populates="jobs")
     applications = relationship("Application", back_populates="job")
     images = relationship("WorkImage", back_populates="job")
+    receipts = relationship("Receipt", back_populates="job")
 
 
 class Application(Base):
@@ -159,3 +161,39 @@ class Dispute(Base):
 
     job = relationship("Job")
     opened_by = relationship("User", foreign_keys=[opened_by_id], back_populates="disputes_opened")
+
+
+class Receipt(Base):
+    __tablename__ = "receipts"
+
+    id = Column(Integer, primary_key=True, index=True)
+    receipt_code = Column(String, unique=True, index=True, nullable=False)
+    job_id = Column(Integer, ForeignKey("jobs.id"), nullable=False)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    amount = Column(Float, nullable=False)
+    commission_amount = Column(Float, default=0.0)
+    net_amount = Column(Float, nullable=False)
+    tax_amount = Column(Float, default=0.0)
+    status = Column(String, default="pending")
+    pdf_url = Column(String, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    paid_at = Column(DateTime, nullable=True)
+
+    job = relationship("Job", back_populates="receipts")
+    user = relationship("User", back_populates="receipts")
+
+
+class DailyReport(Base):
+    __tablename__ = "daily_reports"
+
+    id = Column(Integer, primary_key=True, index=True)
+    report_date = Column(String, unique=True, index=True, nullable=False)
+    total_jobs = Column(Integer, default=0)
+    gross_earnings = Column(Float, default=0.0)
+    total_commission = Column(Float, default=0.0)
+    total_tax = Column(Float, default=0.0)
+    net_earnings = Column(Float, default=0.0)
+    pdf_url = Column(String, nullable=True)
+    sent_to_email = Column(Boolean, default=False)
+    sent_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
