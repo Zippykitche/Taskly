@@ -210,10 +210,12 @@ async def register(user_data: UserRegister, db: Session = Depends(get_db)):
         raise HTTPException(status_code=500, detail=str(e))
         AuditLogger.log_event(
             event_type="REGISTER",
+            user_email=user_data.email if 'user_data' in locals() else None,
             status="ERROR",
             details={"error": str(e)}
         )
         raise HTTPException(status_code=500, detail="Registration error")
+        raise HTTPException(status_code=500, detail=f"Registration error: {e}")
 
 @app.post("/auth/login", response_model=Token)
 async def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
