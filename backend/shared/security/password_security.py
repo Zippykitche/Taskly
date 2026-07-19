@@ -1,3 +1,4 @@
+import hashlib
 import re
 from passlib.context import CryptContext
 
@@ -5,21 +6,45 @@ from passlib.context import CryptContext
 class PasswordSecurity:
     """Secure password hashing and validation."""
 
-    pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+    pwd_context = CryptContext(schemes=["pbkdf2_sha256"], deprecated="auto")
+
+    @staticmethod
+    def _normalize_password(password: str) -> str:
+        if not isinstance(password, str):
+            password = str(password or "")
+        password = password.encode("utf-8", "ignore").decode("utf-8", "ignore")
+        if len(password.encode("utf-8")) > 72:
+            password = password[:72]
+        return password
+
+    @staticmethod
+    def _fallback_hash(password: str) -> str:
+        digest = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), b"taskly", 100000)
+        return f"$pbkdf2-sha256$100000$taskly${digest.hex()}"
 
     @staticmethod
     def hash_password(password: str) -> str:
         if not password:
             raise ValueError("Password cannot be empty")
-        return PasswordSecurity.pwd_context.hash(password)
+        normalized = PasswordSecurity._normalize_password(password)
+        try:
+            return PasswordSecurity.pwd_context.hash(normalized)
+        except Exception:
+            return PasswordSecurity._fallback_hash(normalized)
 
     @staticmethod
     def verify_password(plain_password: str, hashed_password: str) -> bool:
         if not plain_password or not hashed_password:
             return False
         try:
-            return PasswordSecurity.pwd_context.verify(plain_password, hashed_password)
+            normalized_plain = PasswordSecurity._normalize_password(plain_password)
+            return PasswordSecurity.pwd_context.verify(normalized_plain, hashed_password)
         except Exception:
+            if hashed_password.startswith("$pbkdf2-sha256$"):
+                parts = hashed_password.split("$")
+                if len(parts) >= 5:
+                    digest_hex = parts[-1]
+                    return hashlib.pbkdf2_hmac("sha256", normalized_plain.encode("utf-8"), b"taskly", 100000).hex() == digest_hex
             return False
 
     @staticmethod

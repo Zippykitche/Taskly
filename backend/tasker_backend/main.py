@@ -55,6 +55,7 @@ ALGORITHM = "HS256"
 
 # Initialize services
 image_verifier = ImageVerification()
+email_service = EmailService()
 # mpesa_service = MpesaService()
 
 # ========== SCHEMAS ==========
