@@ -57,6 +57,7 @@ ALGORITHM = "HS256"
 
 # Initialize services
 image_verifier = ImageVerification()
+email_service = EmailService()
 # mpesa_service = MpesaService()
 
 # ========== SCHEMAS ==========
@@ -115,11 +116,11 @@ async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = De
             raise HTTPException(status_code=401, detail="User not found")
         
         return user
-    except jwt.ExpiredSignatureError:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token expired")
+    except jwt.ExpiredSignatureError as e:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(e))
     except jwt.InvalidTokenError as e:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(e))
-    except Exception as e:
+    except Exception:
         raise HTTPException(status_code=401, detail="Invalid token")
 
 # Add rate limiting middleware
@@ -163,7 +164,7 @@ async def register(user_data: UserRegister, db: Session = Depends(get_db)):
 
         new_user = User(
             phone_number=user_data.phone_number,
-            password=PasswordSecurity.hash_password(user_data.password),  # HASHED!
+            password=PasswordSecurity.hash_password(user_data.password),
             full_name=InputValidation.sanitize_string(user_data.full_name),
             email=user_data.email.lower(),
             id_number=user_data.id_number,
@@ -206,10 +207,12 @@ async def register(user_data: UserRegister, db: Session = Depends(get_db)):
         db.rollback()
         AuditLogger.log_event(
             event_type="REGISTER",
+            user_email=user_data.email if 'user_data' in locals() else None,
             status="ERROR",
             details={"error": str(e)}
         )
         raise HTTPException(status_code=500, detail="Registration error")
+        raise HTTPException(status_code=500, detail=f"Registration error: {e}")
 
 @app.post("/auth/login", response_model=Token)
 async def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
@@ -508,10 +511,10 @@ async def rate_job(job_id: int, rating_data: AddRating,
         return result
     except Exception as e:
         db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=f"Error rating job: {e}")
 
 @app.get("/profile/{user_id}/ratings")
-async def get_user_ratings(user_id: int, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+async def get_user_ratings(user_id: int, db: Session = Depends(get_db)):
     try:
         return RatingsService.get_user_ratings(db=db, user_id=user_id)
     except Exception as e:
@@ -567,9 +570,13 @@ async def get_wallet(current_user: User = Depends(get_current_user), db: Session
 @app.get("/earnings/transactions")
 async def get_transactions(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     try:
-        transactions = db.query(Transaction).filter(Transaction.user_id == current_user.id).order_by(Transaction.created_at.desc()).all()
-        transactions = db.query(Transaction).filter(Transaction.tasker_id == current_user.id).order_by(Transaction.created_at.desc()).all()
-        
+        transactions = (
+            db.query(Transaction)
+            .filter(Transaction.user_id == current_user.id)
+            .order_by(Transaction.created_at.desc())
+            .all()
+        )
+
         return {
             "transactions": [
                 {
@@ -578,7 +585,6 @@ async def get_transactions(current_user: User = Depends(get_current_user), db: S
                     "type": t.type,
                     "job_id": t.job_id,
                     "status": t.status,
-                    "mpesa_reference": t.mpesa_reference,
                     "mpesa_reference": t.mpesa_receipt_number,
                     "created_at": t.created_at.isoformat()
                 }

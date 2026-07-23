@@ -30,6 +30,17 @@ class EmailService:
         except Exception:
             return False
 
+    def send_registration_email(self, to_email: str, full_name: str, user_type: str) -> bool:
+        """Backward-compatible registration email helper used by the backend tests and routes."""
+        subject = f"Welcome to Taskly, {full_name}" if full_name else "Welcome to Taskly"
+        html_content = f"""
+        <h2>Welcome to Taskly</h2>
+        <p>Hi {full_name or 'there'},</p>
+        <p>Your {user_type or 'account'} has been created successfully.</p>
+        <p>Thanks for joining Taskly.</p>
+        """
+        return self._send(to_email, subject, html_content)
+
     def send_application_received(self, recruiter_email: str, job_title: str, tasker_name: str):
         """Notify recruiter of new application."""
         return self._send(
