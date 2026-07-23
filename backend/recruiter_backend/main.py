@@ -16,6 +16,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')
 # Import database stuff
 from shared.database import get_db, engine, Base
 from shared.models.db_models import User, Job, Application, Transaction, Wallet, Dispute
+from shared.services.supabase_service import supabase_service
 
 # Import services
 from shared.services.email_service import EmailService
@@ -168,6 +169,13 @@ async def register(user_data: UserRegister, db: Session = Depends(get_db)):
             )
             raise HTTPException(status_code=400, detail="User with this phone number already exists")
 
+        existing_email = db.query(User).filter(User.email == user_data.email.lower()).first()
+        if existing_email:
+            raise HTTPException(status_code=400, detail="User with this email already exists")
+
+        # Call Supabase Auth to register user and send confirmation email
+        await supabase_service.signup_user(user_data.email.lower(), user_data.password)
+
         new_user = User(
             user_type='recruiter',
             phone_number=user_data.phone_number,
@@ -186,18 +194,11 @@ async def register(user_data: UserRegister, db: Session = Depends(get_db)):
             event_type="REGISTER", user_id=new_user.id, user_email=new_user.email, status="SUCCESS"
         )
         
-        # This method doesn't exist on the provided email_service
-        # email_service.send_registration_email(
-        #     to_email=new_user.email,
-        #     full_name=new_user.full_name,
-        #     user_type="recruiter"
-        # )
-        
         return {
             "user_id": new_user.id,
             "phone_number": new_user.phone_number,
             "full_name": new_user.full_name,
-            "message": "Registration successful"
+            "message": "Registration successful. Please check your email to activate your account."
         }
     except HTTPException:
         raise
@@ -228,6 +229,10 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = 
             )
             raise HTTPException(status_code=401, detail="Invalid credentials")
         
+        # Verify credentials and account confirmation status in Supabase Auth
+        if supabase_service.is_configured():
+            await supabase_service.authenticate_user(user.email, form_data.password)
+            
         access_token = JWTSecurity.create_access_token(data={"sub": form_data.username})
         
         AuditLogger.log_event(

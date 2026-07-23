@@ -1,3 +1,4 @@
+from __future__ import annotations
 import sys
 import os
 from fastapi import FastAPI, Depends, HTTPException, status, Request
@@ -18,6 +19,7 @@ from dotenv import load_dotenv
 # Import database stuff
 from shared.database import get_db, engine, Base
 from shared.models.db_models import User, Job, Application, WorkImage, Wallet, Transaction, Rating, Dispute
+from shared.services.supabase_service import supabase_service
 
 # Import services
 from shared.services.image_verification import ImageVerification
@@ -103,26 +105,22 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="auth/login")
 
 async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
     try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         payload = JWTSecurity.verify_token(token)
         phone = payload.get("sub")
         if phone is None:
             raise HTTPException(status_code=401, detail="Invalid token")
         
-        user = db.query(User).filter(User.phone_number == phone).first()
         user = db.query(User).filter(User.phone_number == phone, User.user_type == 'tasker').first()
         if not user:
             raise HTTPException(status_code=401, detail="User not found")
         
         return user
     except jwt.ExpiredSignatureError:
-        raise HTTPException(status_code=401, detail="Token expired")
-    except:
-        raise HTTPException(status_code=401, detail="Invalid token")
-    except jwt.ExpiredSignatureError as e:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token expired")
     except jwt.InvalidTokenError as e:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=401, detail="Invalid token")
 
 # Add rate limiting middleware
 @app.middleware("http")
@@ -155,16 +153,19 @@ async def register(user_data: UserRegister, db: Session = Depends(get_db)):
                 details={"reason": "User already exists"}
             )
             raise HTTPException(status_code=400, detail="User already exists")
-        
+            
+        existing_email = db.query(User).filter(User.email == user_data.email.lower()).first()
+        if existing_email:
+            raise HTTPException(status_code=400, detail="User with this email already exists")
+
+        # Call Supabase Auth to register user and send confirmation email
+        await supabase_service.signup_user(user_data.email.lower(), user_data.password)
+
         new_user = User(
             phone_number=user_data.phone_number,
-            password=user_data.password,
-            full_name=user_data.full_name,
-            email=user_data.email,
             password=PasswordSecurity.hash_password(user_data.password),  # HASHED!
             full_name=InputValidation.sanitize_string(user_data.full_name),
             email=user_data.email.lower(),
-            phone_number=user_data.phone_number,
             id_number=user_data.id_number,
             categories=user_data.categories,
             location_city=user_data.location_city,
@@ -176,7 +177,6 @@ async def register(user_data: UserRegister, db: Session = Depends(get_db)):
         db.flush()
         
 
-        # Create wallet
         # Create wallet for the new tasker
         wallet = Wallet(user_id=new_user.id)
         db.add(wallet)
@@ -193,27 +193,17 @@ async def register(user_data: UserRegister, db: Session = Depends(get_db)):
             status="SUCCESS"
         )
 
-        # Send welcome email
-        email_service.send_registration_email(
-            to_email=new_user.email,
-            full_name=new_user.full_name,
-            user_type="tasker"
-        )
-        
         return {
             "user_id": new_user.id,
             "phone_number": new_user.phone_number,
             "full_name": new_user.full_name,
-            "message": "Registration successful"
+            "message": "Registration successful. Please check your email to activate your account."
         }
-
-        return {"user_id": new_user.id, "message": "Registration successful"}
     
     except HTTPException:
         raise
     except Exception as e:
         db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
         AuditLogger.log_event(
             event_type="REGISTER",
             status="ERROR",
@@ -234,6 +224,10 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = 
                 details={"reason": "Invalid credentials"}
             )
             raise HTTPException(status_code=401, detail="Invalid credentials")
+
+        # Verify credentials and account confirmation status in Supabase Auth
+        if supabase_service.is_configured():
+            await supabase_service.authenticate_user(user.email, form_data.password)
 
         access_token = JWTSecurity.create_access_token(data={"sub": form_data.username})
 
@@ -512,7 +506,6 @@ async def rate_job(job_id: int, rating_data: AddRating,
                 )
         
         return result
-            return result
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
@@ -572,7 +565,6 @@ async def get_wallet(current_user: User = Depends(get_current_user), db: Session
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/earnings/transactions")
-async def get_transactions(current_user: User = Depends(get_current_user)):
 async def get_transactions(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     try:
         transactions = db.query(Transaction).filter(Transaction.user_id == current_user.id).order_by(Transaction.created_at.desc()).all()

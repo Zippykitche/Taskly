@@ -1,5 +1,6 @@
 import 'package:ai_mock/ai_mock.dart';
 import 'package:flutter/material.dart';
+import 'api_service.dart';
 import 'package:shared_components/shared_components.dart';
 import 'package:shared_models/shared_models.dart';
 import 'package:shared_theme/shared_theme.dart';
@@ -143,6 +144,7 @@ class _AuthScreenState extends State<AuthScreen> {
   final _emailController = TextEditingController();
   final _phoneController = TextEditingController();
   final _passwordController = TextEditingController();
+  final _confirmPasswordController = TextEditingController();
 
   @override
   void dispose() {
@@ -150,6 +152,7 @@ class _AuthScreenState extends State<AuthScreen> {
     _emailController.dispose();
     _phoneController.dispose();
     _passwordController.dispose();
+    _confirmPasswordController.dispose();
     super.dispose();
   }
 
@@ -259,11 +262,20 @@ class _AuthScreenState extends State<AuthScreen> {
                     icon: Icons.lock_outline_rounded,
                     controller: _passwordController,
                   ),
+                  if (register) ...[
+                    const SizedBox(height: AppSpacing.md),
+                    _InputField(
+                      label: 'Confirm password',
+                      obscure: true,
+                      icon: Icons.lock_outline_rounded,
+                      controller: _confirmPasswordController,
+                    ),
+                  ],
                   const SizedBox(height: AppSpacing.lg),
                   TasklyButton(
                     label: register ? 'Create account' : 'Log in',
                     icon: AppIcons.home,
-                    onPressed: () {
+                    onPressed: () async {
                       final email = _emailController.text.trim();
                       final password = _passwordController.text.trim();
 
@@ -277,10 +289,21 @@ class _AuthScreenState extends State<AuthScreen> {
                         return;
                       }
 
+                      // Show loading spinner
+                      showDialog(
+                        context: context,
+                        barrierDismissible: false,
+                        builder: (context) => Center(
+                          child: CircularProgressIndicator(color: AppColors.primary),
+                        ),
+                      );
+
                       if (register) {
                         final name = _nameController.text.trim();
                         final phone = _phoneController.text.trim();
-                        if (name.isEmpty || phone.isEmpty) {
+                        final confirmPassword = _confirmPasswordController.text.trim();
+                        if (name.isEmpty || phone.isEmpty || confirmPassword.isEmpty) {
+                          Navigator.pop(context); // Dismiss spinner
                           ScaffoldMessenger.of(context).showSnackBar(
                             const SnackBar(
                               content: Text('Please fill in all fields.'),
@@ -290,55 +313,101 @@ class _AuthScreenState extends State<AuthScreen> {
                           return;
                         }
 
-                        final initials = name
-                            .split(' ')
-                            .map((e) => e.isNotEmpty ? e[0] : '')
-                            .take(2)
-                            .join()
-                            .toUpperCase();
-                        final newUser = TasklyUser(
-                          name: name,
-                          email: email,
-                          password: password,
-                          initials: initials.isNotEmpty ? initials : 'U',
-                          location: 'Nairobi, Kenya',
-                          rating: 5.0,
-                          tasksCount: 0,
-                          savedCount: 0,
-                        );
-
-                        currentUserNotifier.value = newUser;
-                      } else {
-                        // Check login credentials against mockUsers
-                        final matchedUser = mockUsers.firstWhere(
-                          (u) =>
-                              u.email.toLowerCase() == email.toLowerCase() &&
-                              u.password == password,
-                          orElse: () => null as dynamic,
-                        );
-
-                        if (matchedUser == null) {
+                        if (password != confirmPassword) {
+                          Navigator.pop(context); // Dismiss spinner
                           ScaffoldMessenger.of(context).showSnackBar(
                             const SnackBar(
-                              content: Text(
-                                  'Invalid email or password. Hint: zipporah@taskly.com / password123'),
+                              content: Text('Passwords do not match.'),
                               backgroundColor: Colors.redAccent,
                             ),
                           );
                           return;
                         }
 
-                        currentUserNotifier.value = matchedUser;
-                      }
+                        final result = await ApiService.register(
+                          name: name,
+                          email: email,
+                          phone: phone,
+                          password: password,
+                        );
 
-                      Navigator.of(context).pushReplacement(
-                        PageRouteBuilder(
-                          pageBuilder: (_, __, ___) => const UserShell(),
-                          transitionsBuilder: (_, animation, __, child) =>
-                              FadeTransition(opacity: animation, child: child),
-                          transitionDuration: AppAnimations.medium,
-                        ),
-                      );
+                        Navigator.pop(context); // Dismiss spinner
+
+                        if (result['success'] == true) {
+                          showDialog(
+                            context: context,
+                            builder: (context) => AlertDialog(
+                              title: const Text('Check your Email', style: TextStyle(fontWeight: FontWeight.w900)),
+                              content: Text(result['message'] ?? 'An activation link has been sent to your email.'),
+                              actions: [
+                                TextButton(
+                                  onPressed: () {
+                                    Navigator.pop(context);
+                                    setState(() {
+                                      register = false;
+                                    });
+                                  },
+                                  child: const Text('OK'),
+                                ),
+                              ],
+                            ),
+                          );
+                        } else {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(result['message'] ?? 'Registration failed.'),
+                              backgroundColor: Colors.redAccent,
+                            ),
+                          );
+                        }
+                      } else {
+                        final result = await ApiService.login(
+                          phoneOrEmail: email,
+                          password: password,
+                        );
+
+                        Navigator.pop(context); // Dismiss spinner
+
+                        if (result['success'] == true) {
+                          // Create TasklyUser local session object
+                          final userMap = result['user'];
+                          final name = userMap != null ? userMap['full_name'] as String : 'User';
+                          final emailStr = userMap != null ? userMap['email'] as String : email;
+                          final initials = name
+                              .split(' ')
+                              .map((e) => e.isNotEmpty ? e[0] : '')
+                              .take(2)
+                              .join()
+                              .toUpperCase();
+
+                          currentUserNotifier.value = TasklyUser(
+                            name: name,
+                            email: emailStr,
+                            password: password,
+                            initials: initials.isNotEmpty ? initials : 'U',
+                            location: userMap != null ? '${userMap['location_city']}, ${userMap['location_area']}' : 'Nairobi, Kenya',
+                            rating: userMap != null ? (userMap['rating'] as num).toDouble() : 5.0,
+                            tasksCount: userMap != null ? (userMap['total_jobs'] as int) : 0,
+                            savedCount: 0,
+                          );
+
+                          Navigator.of(context).pushReplacement(
+                            PageRouteBuilder(
+                              pageBuilder: (_, __, ___) => const UserShell(),
+                              transitionsBuilder: (_, animation, __, child) =>
+                                  FadeTransition(opacity: animation, child: child),
+                              transitionDuration: AppAnimations.medium,
+                            ),
+                          );
+                        } else {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(result['message'] ?? 'Invalid credentials.'),
+                              backgroundColor: Colors.redAccent,
+                            ),
+                          );
+                        }
+                      }
                     },
                   ),
                   SizedBox(height: AppSpacing.md),
@@ -369,7 +438,40 @@ class _AuthScreenState extends State<AuthScreen> {
                           icon: Icons.g_mobiledata_rounded,
                           secondary: true,
                           compact: true,
-                          onPressed: () {},
+                          onPressed: () async {
+                            showDialog(
+                              context: context,
+                              barrierDismissible: false,
+                              builder: (context) => Center(
+                                child: CircularProgressIndicator(color: AppColors.primary),
+                              ),
+                            );
+
+                            await Future.delayed(const Duration(milliseconds: 1000));
+                            if (mounted) {
+                              Navigator.pop(context); // Dismiss spinner
+
+                              currentUserNotifier.value = const TasklyUser(
+                                name: 'Google User',
+                                email: 'google.user@gmail.com',
+                                password: '',
+                                initials: 'GU',
+                                location: 'Nairobi, Kenya',
+                                rating: 5.0,
+                                tasksCount: 0,
+                                savedCount: 0,
+                              );
+
+                              Navigator.of(context).pushReplacement(
+                                PageRouteBuilder(
+                                  pageBuilder: (_, __, ___) => const UserShell(),
+                                  transitionsBuilder: (_, animation, __, child) =>
+                                      FadeTransition(opacity: animation, child: child),
+                                  transitionDuration: AppAnimations.medium,
+                                ),
+                              );
+                            }
+                          },
                         ),
                       ),
                       const SizedBox(width: AppSpacing.sm),
@@ -379,7 +481,40 @@ class _AuthScreenState extends State<AuthScreen> {
                           icon: Icons.apple_rounded,
                           secondary: true,
                           compact: true,
-                          onPressed: () {},
+                          onPressed: () async {
+                            showDialog(
+                              context: context,
+                              barrierDismissible: false,
+                              builder: (context) => Center(
+                                child: CircularProgressIndicator(color: AppColors.primary),
+                              ),
+                            );
+
+                            await Future.delayed(const Duration(milliseconds: 1000));
+                            if (mounted) {
+                              Navigator.pop(context); // Dismiss spinner
+
+                              currentUserNotifier.value = const TasklyUser(
+                                name: 'Apple User',
+                                email: 'apple.user@icloud.com',
+                                password: '',
+                                initials: 'AU',
+                                location: 'Nairobi, Kenya',
+                                rating: 5.0,
+                                tasksCount: 0,
+                                savedCount: 0,
+                              );
+
+                              Navigator.of(context).pushReplacement(
+                                PageRouteBuilder(
+                                  pageBuilder: (_, __, ___) => const UserShell(),
+                                  transitionsBuilder: (_, animation, __, child) =>
+                                      FadeTransition(opacity: animation, child: child),
+                                  transitionDuration: AppAnimations.medium,
+                                ),
+                              );
+                            }
+                          },
                         ),
                       ),
                     ],

@@ -8,6 +8,6 @@ python-multipart
 httpx
 cloudinary
 psycopg2-binary
-pydantic>=2.13.0
+pydantic>=2.9.0
 pydantic-settings
 python-dotenv
