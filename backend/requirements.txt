@@ -1,0 +1,32 @@
+# Core Framework
+fastapi>=0.116.1
+uvicorn[standard]>=0.35.0
+starlette>=0.47.2,<1.0
+python-multipart>=0.0.20
+
+# Database
+sqlalchemy>=2.0.51
+psycopg[binary]>=3.2.9
+alembic>=1.16.4
+
+# Authentication & Security
+python-jose[cryptography]>=3.5.0
+PyJWT>=2.10.1
+passlib[bcrypt]==1.7.4
+
+# Pydantic
+pydantic>=2.11.7
+pydantic-settings>=2.10.1
+
+# Environment
+python-dotenv>=1.1.1
+
+# HTTP Clients
+httpx>=0.28.1
+requests>=2.32.3
+
+# Storage
+cloudinary>=1.44.1
+
+# Real-time & Caching
+redis>=6.2.0

@@ -1,6 +1,0 @@
-{
-  "job_id": 1,
-  "image_type": "before",
-  "image_url": "https://example.com/before.jpg",
-  "cloudinary_id": "xyz123"
-}

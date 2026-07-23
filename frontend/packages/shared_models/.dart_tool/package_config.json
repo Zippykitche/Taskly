@@ -1,0 +1,16 @@
+{
+  "configVersion": 2,
+  "packages": [
+    {
+      "name": "shared_models",
+      "rootUri": "../",
+      "packageUri": "lib/",
+      "languageVersion": "3.3"
+    }
+  ],
+  "generator": "pub",
+  "generatorVersion": "3.12.2",
+  "flutterRoot": "file:///home/zippy/snap/flutter/common/flutter",
+  "flutterVersion": "3.44.4",
+  "pubCache": "file:///home/zippy/.pub-cache"
+}

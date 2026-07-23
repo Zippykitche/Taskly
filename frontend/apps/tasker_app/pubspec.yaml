@@ -1,0 +1,21 @@
+name: taskly_tasker_app
+description: Taskly AI tasker Flutter frontend.
+publish_to: none
+version: 0.1.0
+environment:
+  sdk: ">=3.3.0 <4.0.0"
+dependencies:
+  flutter:
+    sdk: flutter
+  shared_theme:
+    path: ../../packages/shared_theme
+  shared_ui:
+    path: ../../packages/shared_ui
+  shared_components:
+    path: ../../packages/shared_components
+  shared_models:
+    path: ../../packages/shared_models
+  http: ^1.2.0
+
+flutter:
+  uses-material-design: true
