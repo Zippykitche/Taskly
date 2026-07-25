@@ -1,5 +1,6 @@
+from __future__ import annotations
 import os
-from typing import Any
+from typing import Any, Dict
 
 
 class SecretsManager:
@@ -18,5 +19,5 @@ class SecretsManager:
             raise ValueError(f"Missing required secrets: {', '.join(missing)}")
 
     @staticmethod
-    def get_all() -> dict[str, Any]:
+    def get_all() -> Dict[str, Any]:
         return {name: SecretsManager.get_secret(name) for name in SecretsManager.REQUIRED_SECRETS}

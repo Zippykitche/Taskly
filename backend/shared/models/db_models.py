@@ -45,6 +45,23 @@ class User(Base):
     )
     receipts = relationship("Receipt", back_populates="user")
 
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "phone_number": self.phone_number,
+            "full_name": self.full_name,
+            "email": self.email,
+            "user_type": self.user_type,
+            "id_number": self.id_number,
+            "categories": self.categories,
+            "location_city": self.location_city,
+            "location_area": self.location_area,
+            "profile_picture_url": self.profile_picture_url,
+            "rating": self.rating,
+            "total_jobs": self.total_jobs,
+            "created_at": self.created_at.isoformat() if self.created_at else None
+        }
+
 
 class Job(Base):
     __tablename__ = "jobs"

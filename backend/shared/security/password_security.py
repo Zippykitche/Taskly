@@ -1,5 +1,6 @@
 import hashlib
 import re
+from typing import Tuple
 from passlib.context import CryptContext
 
 
@@ -48,7 +49,7 @@ class PasswordSecurity:
             return False
 
     @staticmethod
-    def validate_password_strength(password: str) -> tuple[bool, str]:
+    def validate_password_strength(password: str) -> Tuple[bool, str]:
         if not isinstance(password, str):
             return False, "Password must be a string"
         if len(password) < 12:

@@ -17,6 +17,7 @@ dependencies:
     path: ../../packages/shared_models
   ai_mock:
     path: ../../packages/ai_mock
+  http: ^1.2.0
 
 flutter:
   uses-material-design: true
