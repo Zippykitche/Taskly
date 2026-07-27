@@ -263,6 +263,43 @@ class _AuthScreenState extends State<AuthScreen> {
                     controller: _passwordController,
                   ),
                   if (register) ...[
+                    const SizedBox(height: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                      decoration: BoxDecoration(
+                        color: AppColors.primary.withOpacity(0.06),
+                        borderRadius: AppRadius.smBorder,
+                        border: Border.all(color: AppColors.primary.withOpacity(0.18)),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Icon(Icons.shield_outlined, size: 14, color: AppColors.primary),
+                              const SizedBox(width: 6),
+                              Text(
+                                'Password Requirements:',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.bold,
+                                  color: AppColors.primary,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            '• Minimum 8 characters long\n• Include uppercase & lowercase letters\n• Include at least one number & special character (e.g. !@#\$%)',
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: AppColors.textSecondary,
+                              height: 1.4,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                     const SizedBox(height: AppSpacing.md),
                     _InputField(
                       label: 'Confirm password',
@@ -276,6 +313,7 @@ class _AuthScreenState extends State<AuthScreen> {
                     label: register ? 'Create account' : 'Log in',
                     icon: AppIcons.home,
                     onPressed: () async {
+                      FocusScope.of(context).unfocus();
                       final email = _emailController.text.trim();
                       final password = _passwordController.text.trim();
 
@@ -337,17 +375,37 @@ class _AuthScreenState extends State<AuthScreen> {
                           showDialog(
                             context: context,
                             builder: (context) => AlertDialog(
-                              title: const Text('Check your Email', style: TextStyle(fontWeight: FontWeight.w900)),
-                              content: Text(result['message'] ?? 'An activation link has been sent to your email.'),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(20),
+                              ),
+                              title: Row(
+                                children: [
+                                  Icon(Icons.mark_email_read_outlined, color: AppColors.primary, size: 28),
+                                  const SizedBox(width: 10),
+                                  const Text('Check your Email', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 18)),
+                                ],
+                              ),
+                              content: Text(
+                                result['message'] ?? 'An activation link has been sent to $email. Please check your email to activate your account.',
+                                style: const TextStyle(fontSize: 14, height: 1.4),
+                              ),
                               actions: [
-                                TextButton(
+                                ElevatedButton(
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: AppColors.primary,
+                                    foregroundColor: Colors.white,
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                                  ),
                                   onPressed: () {
                                     Navigator.pop(context);
                                     setState(() {
                                       register = false;
                                     });
                                   },
-                                  child: const Text('OK'),
+                                  child: const Text('Go to Log In', style: TextStyle(fontWeight: FontWeight.bold)),
                                 ),
                               ],
                             ),
@@ -400,10 +458,104 @@ class _AuthScreenState extends State<AuthScreen> {
                             ),
                           );
                         } else {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text(result['message'] ?? 'Invalid credentials.'),
-                              backgroundColor: Colors.redAccent,
+                          showDialog(
+                            context: context,
+                            builder: (context) => AlertDialog(
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(20),
+                              ),
+                              title: Row(
+                                children: [
+                                  Container(
+                                    padding: const EdgeInsets.all(8),
+                                    decoration: BoxDecoration(
+                                      color: AppColors.primary.withOpacity(0.12),
+                                      shape: BoxShape.circle,
+                                    ),
+                                    child: Icon(
+                                      Icons.person_add_rounded,
+                                      color: AppColors.primary,
+                                      size: 24,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  const Expanded(
+                                    child: Text(
+                                      'Account Not Found',
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.w900,
+                                        fontSize: 18,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              content: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'No registered account was found for "$email". Would you like to create an account now?',
+                                    style: TextStyle(
+                                      color: AppColors.textSecondary,
+                                      fontSize: 14,
+                                      height: 1.4,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                              actions: [
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      child: OutlinedButton(
+                                        style: OutlinedButton.styleFrom(
+                                          side: BorderSide(color: AppColors.border),
+                                          shape: RoundedRectangleBorder(
+                                            borderRadius: BorderRadius.circular(12),
+                                          ),
+                                          padding: const EdgeInsets.symmetric(vertical: 12),
+                                        ),
+                                        onPressed: () => Navigator.pop(context),
+                                        child: Text(
+                                          'Cancel',
+                                          style: TextStyle(
+                                            color: AppColors.textMuted,
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      child: ElevatedButton(
+                                        style: ElevatedButton.styleFrom(
+                                          backgroundColor: AppColors.primary,
+                                          foregroundColor: Colors.white,
+                                          elevation: 0,
+                                          shape: RoundedRectangleBorder(
+                                            borderRadius: BorderRadius.circular(12),
+                                          ),
+                                          padding: const EdgeInsets.symmetric(vertical: 12),
+                                        ),
+                                        onPressed: () {
+                                          Navigator.pop(context);
+                                          setState(() {
+                                            register = true;
+                                          });
+                                        },
+                                        child: const Text(
+                                          'Create Account',
+                                          style: TextStyle(
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ],
                             ),
                           );
                         }
@@ -435,43 +587,10 @@ class _AuthScreenState extends State<AuthScreen> {
                       Expanded(
                         child: TasklyButton(
                           label: 'Google',
-                          icon: Icons.g_mobiledata_rounded,
+                          iconWidget: const GoogleLogoWidget(size: 16),
                           secondary: true,
                           compact: true,
-                          onPressed: () async {
-                            showDialog(
-                              context: context,
-                              barrierDismissible: false,
-                              builder: (context) => Center(
-                                child: CircularProgressIndicator(color: AppColors.primary),
-                              ),
-                            );
-
-                            await Future.delayed(const Duration(milliseconds: 1000));
-                            if (mounted) {
-                              Navigator.pop(context); // Dismiss spinner
-
-                              currentUserNotifier.value = const TasklyUser(
-                                name: 'Google User',
-                                email: 'google.user@gmail.com',
-                                password: '',
-                                initials: 'GU',
-                                location: 'Nairobi, Kenya',
-                                rating: 5.0,
-                                tasksCount: 0,
-                                savedCount: 0,
-                              );
-
-                              Navigator.of(context).pushReplacement(
-                                PageRouteBuilder(
-                                  pageBuilder: (_, __, ___) => const UserShell(),
-                                  transitionsBuilder: (_, animation, __, child) =>
-                                      FadeTransition(opacity: animation, child: child),
-                                  transitionDuration: AppAnimations.medium,
-                                ),
-                              );
-                            }
-                          },
+                          onPressed: () => _showGoogleSignInModal(context),
                         ),
                       ),
                       const SizedBox(width: AppSpacing.sm),
@@ -525,7 +644,10 @@ class _AuthScreenState extends State<AuthScreen> {
             const SizedBox(height: AppSpacing.md),
             Center(
               child: TextButton(
-                onPressed: () => setState(() => register = !register),
+                onPressed: () {
+                  FocusScope.of(context).unfocus();
+                  setState(() => register = !register);
+                },
                 child: Text(
                   register
                       ? 'Already have an account? Log in'
@@ -538,6 +660,301 @@ class _AuthScreenState extends State<AuthScreen> {
         ),
       ),
     );
+  }
+
+  void _showGoogleSignInModal(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (sheetContext) {
+        String customEmail = '';
+        bool isCustom = false;
+        final emailController = TextEditingController();
+
+        return StatefulBuilder(
+          builder: (context, setSheetState) {
+            return Container(
+              decoration: BoxDecoration(
+                color: Theme.of(context).scaffoldBackgroundColor,
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+              ),
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+              child: SafeArea(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Center(
+                      child: Container(
+                        width: 36,
+                        height: 4,
+                        decoration: BoxDecoration(
+                          color: AppColors.border,
+                          borderRadius: BorderRadius.circular(2),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    Row(
+                      children: [
+                        const GoogleLogoWidget(size: 26),
+                        const SizedBox(width: 12),
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Sign in with Google',
+                              style: TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.w900,
+                                color: AppColors.textPrimary,
+                              ),
+                            ),
+                            Text(
+                              'Choose an account to continue to Taskly',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: AppColors.textMuted,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 20),
+                    const Divider(height: 1),
+                    const SizedBox(height: 12),
+                    
+                    _buildGoogleAccountOption(
+                      context,
+                      name: 'Alex Kiprop',
+                      email: 'alex.kiprop@gmail.com',
+                      initials: 'AK',
+                      avatarColor: const Color(0xFF4285F4),
+                    ),
+                    _buildGoogleAccountOption(
+                      context,
+                      name: 'Grace Wanjiku',
+                      email: 'grace.wanjiku@gmail.com',
+                      initials: 'GW',
+                      avatarColor: const Color(0xFFEA4335),
+                    ),
+
+                    if (!isCustom)
+                      ListTile(
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+                        leading: CircleAvatar(
+                          backgroundColor: AppColors.border.withOpacity(0.5),
+                          child: Icon(Icons.person_add_outlined, color: AppColors.textPrimary, size: 20),
+                        ),
+                        title: const Text(
+                          'Use another Google account',
+                          style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                        ),
+                        onTap: () {
+                          setSheetState(() {
+                            isCustom = true;
+                          });
+                        },
+                      ),
+
+                    if (isCustom) ...[
+                      const SizedBox(height: 8),
+                      TextField(
+                        controller: emailController,
+                        keyboardType: TextInputType.emailAddress,
+                        decoration: InputDecoration(
+                          hintText: 'Enter your Google email',
+                          prefixIcon: const Icon(Icons.email_outlined, size: 20),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: OutlinedButton(
+                              onPressed: () {
+                                setSheetState(() {
+                                  isCustom = false;
+                                });
+                              },
+                              child: const Text('Back'),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: ElevatedButton(
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: const Color(0xFF4285F4),
+                                foregroundColor: Colors.white,
+                              ),
+                              onPressed: () {
+                                final typed = emailController.text.trim();
+                                if (typed.isNotEmpty && typed.contains('@')) {
+                                  final namePart = typed.split('@').first;
+                                  final capitalized = namePart.isNotEmpty
+                                      ? namePart[0].toUpperCase() + namePart.substring(1)
+                                      : 'Google User';
+                                  _completeGoogleLogin(
+                                    context: context,
+                                    name: capitalized,
+                                    email: typed,
+                                    initials: namePart.substring(0, namePart.length.clamp(1, 2)).toUpperCase(),
+                                  );
+                                }
+                              },
+                              child: const Text('Continue'),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+
+                    const SizedBox(height: 16),
+                    Center(
+                      child: TextButton(
+                        onPressed: () => Navigator.pop(context),
+                        child: Text(
+                          'Cancel',
+                          style: TextStyle(color: AppColors.textMuted, fontWeight: FontWeight.w600),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildGoogleAccountOption(
+    BuildContext context, {
+    required String name,
+    required String email,
+    required String initials,
+    required Color avatarColor,
+  }) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: () {
+          _completeGoogleLogin(
+            context: context,
+            name: name,
+            email: email,
+            initials: initials,
+          );
+        },
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+          child: Row(
+            children: [
+              CircleAvatar(
+                backgroundColor: avatarColor,
+                child: Text(
+                  initials,
+                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                ),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      name,
+                      style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
+                    ),
+                    Text(
+                      email,
+                      style: TextStyle(fontSize: 12, color: AppColors.textMuted),
+                    ),
+                  ],
+                ),
+              ),
+              const Icon(Icons.arrow_forward_ios_rounded, size: 14, color: Colors.grey),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _completeGoogleLogin({
+    required BuildContext context,
+    required String name,
+    required String email,
+    required String initials,
+  }) async {
+    Navigator.pop(context); // Close bottom sheet
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => Dialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        child: Padding(
+          padding: const EdgeInsets.all(24.0),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const GoogleLogoWidget(size: 36),
+              const SizedBox(height: 16),
+              CircularProgressIndicator(color: AppColors.primary),
+              const SizedBox(height: 16),
+              Text(
+                'Signing in as $email...',
+                textAlign: TextAlign.center,
+                style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    await Future.delayed(const Duration(milliseconds: 1200));
+
+    if (mounted) {
+      Navigator.pop(context); // Dismiss loading dialog
+
+      currentUserNotifier.value = TasklyUser(
+        name: name,
+        email: email,
+        password: '',
+        initials: initials,
+        location: 'Nairobi, Kenya',
+        rating: 5.0,
+        tasksCount: 0,
+        savedCount: 0,
+      );
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Successfully signed in with Google as $email'),
+          backgroundColor: const Color(0xFF34A853),
+          duration: const Duration(seconds: 3),
+        ),
+      );
+
+      Navigator.of(context).pushReplacement(
+        PageRouteBuilder(
+          pageBuilder: (_, __, ___) => const UserShell(),
+          transitionsBuilder: (_, animation, __, child) =>
+              FadeTransition(opacity: animation, child: child),
+          transitionDuration: AppAnimations.medium,
+        ),
+      );
+    }
   }
 }
 
@@ -563,6 +980,7 @@ class _UserShellState extends State<UserShell> {
     return Scaffold(
       body: IndexedStack(index: index, children: pages),
       floatingActionButton: FloatingActionButton(
+        heroTag: 'user_shell_fab',
         onPressed: () => Navigator.of(context).push(
           MaterialPageRoute(builder: (_) => const AiAssistantScreen()),
         ),
@@ -1869,6 +2287,7 @@ class MessagesScreen extends StatelessWidget {
                             icon: Icons.message_outlined)),
                     const SizedBox(width: AppSpacing.sm),
                     FloatingActionButton(
+                      heroTag: 'tracking_send_fab',
                       onPressed: () {},
                       shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(AppRadius.pill)),
@@ -2232,6 +2651,7 @@ class AiAssistantScreen extends StatelessWidget {
                   ),
                   const SizedBox(width: AppSpacing.sm),
                   FloatingActionButton(
+                    heroTag: 'ai_assistant_send_fab',
                     onPressed: () {},
                     backgroundColor: const Color(0xFF6366F1),
                     shape: RoundedRectangleBorder(
@@ -2286,8 +2706,9 @@ class _SectionTitle extends StatelessWidget {
   }
 }
 
-class _InputField extends StatelessWidget {
+class _InputField extends StatefulWidget {
   const _InputField({
+    super.key,
     required this.label,
     this.obscure = false,
     this.minLines = 1,
@@ -2303,17 +2724,54 @@ class _InputField extends StatelessWidget {
   final TextEditingController? controller;
 
   @override
+  State<_InputField> createState() => _InputFieldState();
+}
+
+class _InputFieldState extends State<_InputField> {
+  late bool _obscureText;
+
+  @override
+  void initState() {
+    super.initState();
+    _obscureText = widget.obscure;
+  }
+
+  @override
+  void didUpdateWidget(covariant _InputField oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.obscure != widget.obscure) {
+      _obscureText = widget.obscure;
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     return TextField(
-      controller: controller,
-      obscureText: obscure,
-      minLines: obscure ? 1 : minLines,
-      maxLines: obscure ? 1 : maxLines,
+      controller: widget.controller,
+      obscureText: _obscureText,
+      minLines: _obscureText ? 1 : widget.minLines,
+      maxLines: _obscureText ? 1 : widget.maxLines,
       style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14.5),
       decoration: InputDecoration(
-        labelText: label,
-        prefixIcon: icon != null
-            ? Icon(icon, size: 20, color: AppColors.textSecondary)
+        labelText: widget.label,
+        prefixIcon: widget.icon != null
+            ? Icon(widget.icon, size: 20, color: AppColors.textSecondary)
+            : null,
+        suffixIcon: widget.obscure
+            ? IconButton(
+                icon: Icon(
+                  _obscureText
+                      ? Icons.visibility_outlined
+                      : Icons.visibility_off_outlined,
+                  size: 20,
+                  color: AppColors.textSecondary,
+                ),
+                onPressed: () {
+                  setState(() {
+                    _obscureText = !_obscureText;
+                  });
+                },
+              )
             : null,
       ),
     );

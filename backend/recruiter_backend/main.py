@@ -1,3 +1,4 @@
+from typing import Optional, Dict, Any
 import sys
 import os
 from datetime import datetime
@@ -7,7 +8,7 @@ from fastapi.security import OAuth2PasswordRequestForm, OAuth2PasswordBearer
 from pydantic import BaseModel
 import jwt
 from sqlalchemy.orm import Session
-from sqlalchemy import text
+from sqlalchemy import text, or_
 from dotenv import load_dotenv
 
 # Add project root to path to allow imports from shared
@@ -86,6 +87,7 @@ class JobCreate(BaseModel):
 class Token(BaseModel):
     access_token: str
     token_type: str
+    user: Optional[Dict[str, Any]] = None
 
 class InitiatePayment(BaseModel):
     phone_number: str
@@ -187,6 +189,11 @@ async def register(user_data: UserRegister, db: Session = Depends(get_db)):
         )
         
         db.add(new_user)
+        db.flush()
+
+        wallet = Wallet(user_id=new_user.id)
+        db.add(wallet)
+
         db.commit()
         db.refresh(new_user)
         
@@ -205,7 +212,7 @@ async def register(user_data: UserRegister, db: Session = Depends(get_db)):
     except Exception as e:
         db.rollback()
         AuditLogger.log_event(event_type="REGISTER", status="ERROR", details={"error": str(e)})
-        raise HTTPException(status_code=500, detail="An unexpected error occurred during registration.")
+        raise HTTPException(status_code=400, detail=f"Registration error: {str(e)}")
 
 @app.post("/auth/login", response_model=Token)
 async def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
@@ -220,32 +227,56 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = 
         An access token and token type.
     """
     try:
-        user = db.query(User).filter(User.phone_number == form_data.username, User.user_type == 'recruiter').first()
-        
-        if not user or not PasswordSecurity.verify_password(form_data.password, user.password):
+        # Check if user exists by phone or email
+        user = db.query(User).filter(
+            or_(User.phone_number == form_data.username, User.email == form_data.username),
+            User.user_type == 'recruiter'
+        ).first()
+
+        if not user:
             AuditLogger.log_event(
                 event_type="FAILED_LOGIN", user_email=form_data.username, status="FAILED",
-                details={"reason": "Invalid credentials"}
+                details={"reason": "User not registered"}
             )
-            raise HTTPException(status_code=401, detail="Invalid credentials")
-        
+            raise HTTPException(status_code=404, detail="Account not registered. Please sign up first.")
+
+        if not PasswordSecurity.verify_password(form_data.password, user.password):
+            AuditLogger.log_event(
+                event_type="FAILED_LOGIN", user_email=form_data.username, status="FAILED",
+                details={"reason": "Invalid password"}
+            )
+            raise HTTPException(status_code=401, detail="Incorrect password. Please try again.")
+
         # Verify credentials and account confirmation status in Supabase Auth
         if supabase_service.is_configured():
-            await supabase_service.authenticate_user(user.email, form_data.password)
-            
-        access_token = JWTSecurity.create_access_token(data={"sub": form_data.username})
-        
+            try:
+                await supabase_service.authenticate_user(user.email, form_data.password)
+            except Exception:
+                raise HTTPException(status_code=401, detail="Account confirmation pending. Please check your email or sign up first.")
+
+        access_token = JWTSecurity.create_access_token(data={"sub": user.phone_number or user.email})
+
         AuditLogger.log_event(
             event_type="LOGIN", user_id=user.id, user_email=user.email, status="SUCCESS"
         )
-        
-        return {"access_token": access_token, "token_type": "bearer"}
+
+        return {
+            "access_token": access_token,
+            "token_type": "bearer",
+            "user": {
+                "id": user.id,
+                "full_name": user.full_name,
+                "email": user.email,
+                "phone_number": user.phone_number,
+                "location_city": user.location_city,
+            }
+        }
     except HTTPException:
         raise
     except Exception as e:
         db.rollback()
         AuditLogger.log_event(event_type="LOGIN", status="ERROR", details={"error": str(e)})
-        raise HTTPException(status_code=500, detail="An unexpected error occurred during login.")
+        raise HTTPException(status_code=400, detail="Account not registered. Please sign up first.")
 
 # ========== JOB ROUTES ==========
 @app.post("/jobs/create")

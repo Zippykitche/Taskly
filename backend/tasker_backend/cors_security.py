@@ -12,6 +12,8 @@ def configure_cors(app):
         "http://localhost:8000",  # Local testing
         "https://taskly.app",  # Production
         "https://www.taskly.app",
+        "https://taskly-recruiter-backend.onrender.com",
+        "https://taskly-tasker-backend.onrender.com",
     ]
     
     # Don't use * in production
@@ -29,7 +31,7 @@ def configure_cors(app):
         # More permissive in development
         app.add_middleware(
             CORSMiddleware,
-            allow_origins=["*"],
+            allow_origin_regex=r".*",
             allow_credentials=True,
             allow_methods=["*"],
             allow_headers=["*"],

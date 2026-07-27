@@ -52,8 +52,8 @@ class PasswordSecurity:
     def validate_password_strength(password: str) -> Tuple[bool, str]:
         if not isinstance(password, str):
             return False, "Password must be a string"
-        if len(password) < 12:
-            return False, "Password must be at least 12 characters"
+        if len(password) < 8:
+            return False, "Password must be at least 8 characters"
         if not re.search(r"[A-Z]", password):
             return False, "Password must contain an uppercase letter"
         if not re.search(r"[a-z]", password):

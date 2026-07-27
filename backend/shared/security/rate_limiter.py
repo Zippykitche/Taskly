@@ -54,6 +54,9 @@ rate_limiter = RateLimiter()
 
 
 async def rate_limit_middleware(request: Request, call_next):
+    if request.method == "OPTIONS":
+        return await call_next(request)
+
     client_ip = request.client.host if request.client else "unknown"
     path = request.url.path
     if "/auth/login" in path:

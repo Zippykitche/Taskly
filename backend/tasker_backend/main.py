@@ -1,4 +1,5 @@
 from __future__ import annotations
+from typing import Optional, Dict, Any
 import sys
 import os
 from fastapi import FastAPI, Depends, HTTPException, status, Request
@@ -13,7 +14,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')
 from datetime import datetime
 from sqlalchemy.orm import Session
 from sqlalchemy.orm import Session, joinedload
-from sqlalchemy import text
+from sqlalchemy import text, or_
 from dotenv import load_dotenv
 
 # Import database stuff
@@ -78,6 +79,7 @@ class UserLogin(BaseModel):
 class Token(BaseModel):
     access_token: str
     token_type: str
+    user: Optional[Dict[str, Any]] = None
 
 class UploadImage(BaseModel):
     job_id: int
@@ -211,28 +213,42 @@ async def register(user_data: UserRegister, db: Session = Depends(get_db)):
             status="ERROR",
             details={"error": str(e)}
         )
-        raise HTTPException(status_code=500, detail="Registration error")
-        raise HTTPException(status_code=500, detail=f"Registration error: {e}")
+        raise HTTPException(status_code=400, detail=f"Registration error: {str(e)}")
 
 @app.post("/auth/login", response_model=Token)
 async def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
     try:
-        user = db.query(User).filter(User.phone_number == form_data.username, User.user_type == 'tasker').first()
+        user = db.query(User).filter(
+            or_(User.phone_number == form_data.username, User.email == form_data.username),
+            User.user_type == 'tasker'
+        ).first()
 
-        if not user or not PasswordSecurity.verify_password(form_data.password, user.password):
+        if not user:
             AuditLogger.log_event(
                 event_type="FAILED_LOGIN",
                 user_email=form_data.username,
                 status="FAILED",
-                details={"reason": "Invalid credentials"}
+                details={"reason": "User not registered"}
             )
-            raise HTTPException(status_code=401, detail="Invalid credentials")
+            raise HTTPException(status_code=404, detail="Account not registered. Please sign up first.")
+
+        if not PasswordSecurity.verify_password(form_data.password, user.password):
+            AuditLogger.log_event(
+                event_type="FAILED_LOGIN",
+                user_email=form_data.username,
+                status="FAILED",
+                details={"reason": "Invalid password"}
+            )
+            raise HTTPException(status_code=401, detail="Incorrect password. Please try again.")
 
         # Verify credentials and account confirmation status in Supabase Auth
         if supabase_service.is_configured():
-            await supabase_service.authenticate_user(user.email, form_data.password)
+            try:
+                await supabase_service.authenticate_user(user.email, form_data.password)
+            except Exception:
+                raise HTTPException(status_code=401, detail="Account confirmation pending. Please check your email or sign up first.")
 
-        access_token = JWTSecurity.create_access_token(data={"sub": form_data.username})
+        access_token = JWTSecurity.create_access_token(data={"sub": user.phone_number or user.email})
 
         AuditLogger.log_event(
             event_type="LOGIN",
@@ -241,7 +257,17 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = 
             status="SUCCESS"
         )
 
-        return {"access_token": access_token, "token_type": "bearer"}
+        return {
+            "access_token": access_token,
+            "token_type": "bearer",
+            "user": {
+                "id": user.id,
+                "full_name": user.full_name,
+                "email": user.email,
+                "phone_number": user.phone_number,
+                "location_city": user.location_city,
+            }
+        }
     except HTTPException:
         raise
     except Exception as e:
@@ -250,7 +276,7 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = 
             status="ERROR",
             details={"error": str(e)}
         )
-        raise HTTPException(status_code=500, detail="Login error")
+        raise HTTPException(status_code=400, detail="Account not registered. Please sign up first.")
 
 # ========== JOB ROUTES ==========
 @app.get("/jobs/browse")
