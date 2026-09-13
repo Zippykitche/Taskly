@@ -14,10 +14,8 @@ from dotenv import load_dotenv
 # Add project root to path to allow imports from shared
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-# Import database stuff
 from shared.database import get_db, engine, Base
 from shared.models.db_models import User, Job, Application, Transaction, Wallet, Dispute
-from shared.services.supabase_service import supabase_service
 
 # Import services
 from shared.services.email_service import EmailService
@@ -175,8 +173,12 @@ async def register(user_data: UserRegister, db: Session = Depends(get_db)):
         if existing_email:
             raise HTTPException(status_code=400, detail="User with this email already exists")
 
-        # Call Supabase Auth to register user and send confirmation email
-        await supabase_service.signup_user(user_data.email.lower(), user_data.password)
+        # Send welcome email if email service is configured
+        if email_service:
+            try:
+                email_service.send_registration_email(user_data.email.lower(), user_data.full_name, "recruiter")
+            except Exception:
+                pass
 
         new_user = User(
             user_type='recruiter',
@@ -205,14 +207,17 @@ async def register(user_data: UserRegister, db: Session = Depends(get_db)):
             "user_id": new_user.id,
             "phone_number": new_user.phone_number,
             "full_name": new_user.full_name,
-            "message": "Registration successful. Please check your email to activate your account."
+            "message": "Registration successful. You can now log in."
         }
     except HTTPException:
         raise
     except Exception as e:
         db.rollback()
         AuditLogger.log_event(event_type="REGISTER", status="ERROR", details={"error": str(e)})
-        raise HTTPException(status_code=400, detail=f"Registration error: {str(e)}")
+        error_msg = str(e).lower()
+        if "connection" in error_msg or "operationalerror" in error_msg:
+            raise HTTPException(status_code=503, detail="Database service temporarily unavailable. Please try again in a moment.")
+        raise HTTPException(status_code=400, detail=f"Registration failed: {str(e)}")
 
 @app.post("/auth/login", response_model=Token)
 async def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
@@ -247,13 +252,6 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = 
             )
             raise HTTPException(status_code=401, detail="Incorrect password. Please try again.")
 
-        # Verify credentials and account confirmation status in Supabase Auth
-        if supabase_service.is_configured():
-            try:
-                await supabase_service.authenticate_user(user.email, form_data.password)
-            except Exception:
-                raise HTTPException(status_code=401, detail="Account confirmation pending. Please check your email or sign up first.")
-
         access_token = JWTSecurity.create_access_token(data={"sub": user.phone_number or user.email})
 
         AuditLogger.log_event(
@@ -276,7 +274,10 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = 
     except Exception as e:
         db.rollback()
         AuditLogger.log_event(event_type="LOGIN", status="ERROR", details={"error": str(e)})
-        raise HTTPException(status_code=400, detail="Account not registered. Please sign up first.")
+        error_msg = str(e).lower()
+        if "connection" in error_msg or "operationalerror" in error_msg:
+            raise HTTPException(status_code=503, detail="Database service temporarily unavailable. Please try again in a moment.")
+        raise HTTPException(status_code=400, detail="Invalid phone number or password.")
 
 # ========== JOB ROUTES ==========
 @app.post("/jobs/create")

@@ -32,15 +32,21 @@ class TasklyLogo extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: size,
+    return Image.asset(
+      'assets/images/tasklylogo.png',
       height: size,
-      decoration: BoxDecoration(
-        gradient: AppColors.primaryGradient,
-        borderRadius: BorderRadius.circular(size * .36),
-        boxShadow: AppShadows.glow,
-      ),
-      child: Icon(Icons.bolt_rounded, color: Colors.black, size: size * .58),
+      fit: BoxFit.contain,
+      errorBuilder: (context, error, stackTrace) {
+        return Container(
+          width: size,
+          height: size,
+          decoration: BoxDecoration(
+            color: const Color(0xFF00B37E),
+            borderRadius: BorderRadius.circular(size * .36),
+          ),
+          child: Icon(Icons.check_circle_rounded, color: Colors.white, size: size * .6),
+        );
+      },
     );
   }
 }

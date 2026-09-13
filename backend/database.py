@@ -4,11 +4,15 @@ from sqlalchemy.orm import sessionmaker
 from datetime import datetime
 import os
 
+from dotenv import load_dotenv
+
+load_dotenv()
+
 # Database URL from environment
 DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./taskly.db")
 
-# For PostgreSQL, it looks like:
-# postgresql://user:password@localhost:5432/taskly_db
+if DATABASE_URL.startswith("postgresql://"):
+    DATABASE_URL = DATABASE_URL.replace("postgresql://", "postgresql+psycopg://", 1)
 
 engine = create_engine(
     DATABASE_URL,

@@ -1,32 +1,39 @@
-# Secrets
+# ==============================
+# Secrets & Environment
+# ==============================
 .env
 .env.local
 .env.*.local
+*.env
+*.env.*
 *.key
 *.pem
+*.keystore
+*.jks
+*.p12
+local.properties
+key.properties
 
-# Sensitive files
+# ==============================
+# Sensitive / Runtime Data
+# ==============================
 audit_logs/
 receipts/
 reports/
 
-# Python & Dependencies
+# ==============================
+# Python
+# ==============================
 __pycache__/
-<<<<<<< HEAD
-*.pyc
-*.pyo
-*.pyd
-.Python
-dist/
-=======
 *.py[cod]
 *$py.class
 *.so
 .Python
->>>>>>> zippy/main
+
+# Python build/distribution
 build/
-develop-eggs/
 dist/
+develop-eggs/
 downloads/
 eggs/
 .eggs/
@@ -42,15 +49,13 @@ share/python-wheels/
 *.egg
 MANIFEST
 
-# Virtual Environments
+# Python virtual environments
 venv/
 env/
 ENV/
 .venv/
 pip-selfcheck.json
 
-<<<<<<< HEAD
-=======
 # Pytest / Coverage
 .cache/
 .pytest_cache/
@@ -63,51 +68,15 @@ coverage.xml
 *.cover
 .hypothesis/
 
->>>>>>> zippy/main
-# Database
+# ==============================
+# Databases
+# ==============================
 *.db
 *.sqlite3
 
-# Secrets, private keys, and environment variables
-.env
-.env.local
-.env.*.local
-*.env
-*.env.*
-*.key
-*.keystore
-*.jks
-*.p12
-*.pem
-local.properties
-key.properties
-
-# OS files
-.DS_Store
-.AppleDouble
-.LSOverride
-Icon\r
-._*
-.Spotlight-V100
-.Trashes
-ehthumbs.db
-Thumbs.db
-
-# IDEs and Editors
-.idea/
-*.iml
-*.ipr
-*.iws
-.vscode/
-!.vscode/extensions.json
-!.vscode/launch.json
-!.vscode/settings.json
-*.sublime-project
-*.sublime-workspace
-.history/
-*.log
-
-# Dart / Flutter
+# ==============================
+# Flutter / Dart
+# ==============================
 **/.dart_tool/
 **/.flutter-plugins
 **/.flutter-plugins-dependencies
@@ -118,7 +87,7 @@ Thumbs.db
 **/.pub/
 **/pubspec_overrides.yaml
 
-# Platforms-specific build files/folders
+# Flutter generated platform files
 **/android/app/debug/
 **/android/app/profile/
 **/android/app/release/
@@ -132,10 +101,44 @@ Thumbs.db
 **/linux/flutter/ephemeral/
 **/windows/flutter/ephemeral/
 
-# Node/Web dependencies
+# ==============================
+# Node / Web
+# ==============================
 node_modules/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 .eslintcache
+
+# ==============================
+# IDEs / Editors
+# ==============================
+.idea/
+*.iml
+*.ipr
+*.iws
+.vscode/
+!.vscode/extensions.json
+!.vscode/launch.json
+!.vscode/settings.json
+*.sublime-project
+*.sublime-workspace
+.history/
+*.log
+
+# ==============================
+# OS files
+# ==============================
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+# Alembic generated output
+backend/.alembic_out.txt
+backend/.alembic_out_utf8.txt

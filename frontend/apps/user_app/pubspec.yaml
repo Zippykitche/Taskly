@@ -1,5 +1,5 @@
 name: user_app
-description: Taskly User App - For Recruiters and Employers
+description: Taskly User App - For Customers and Clients
 publish_to: 'none'
 
 version: 1.0.0+1
@@ -10,8 +10,11 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-  supabase_flutter: ^2.0.0
-  google_sign_in: ^6.2.0
+  shared_theme: ^0.1.0
+  shared_models: ^0.1.0
+  shared_ui: ^0.1.0
+  shared_components: ^0.1.0
+  ai_mock: ^0.1.0
   cupertino_icons: ^1.0.2
   google_fonts: ^6.2.0
   flutter_svg: ^2.0.10
@@ -23,8 +26,6 @@ dependencies:
   uuid: ^4.0.0
   logger: ^2.0.0
   equatable: ^2.0.5
-  image_picker: ^1.0.4
-  flutter_image_compress: ^2.1.0
   cached_network_image: ^3.3.1
   email_validator: ^2.1.17
 
@@ -37,5 +38,3 @@ flutter:
   uses-material-design: true
   assets:
     - assets/images/
-    - assets/icons/
-    - assets/logos/
