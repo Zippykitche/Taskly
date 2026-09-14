@@ -3,7 +3,7 @@ import sys
 import os
 from datetime import datetime
 
-from fastapi import FastAPI, Depends, HTTPException, status, Request
+from fastapi import FastAPI, Depends, HTTPException, status, Request, BackgroundTasks
 from fastapi.security import OAuth2PasswordRequestForm, OAuth2PasswordBearer
 from pydantic import BaseModel
 import jwt
@@ -135,12 +135,13 @@ async def get_current_recruiter(token: str = Depends(oauth2_scheme), db: Session
 
 # ========== AUTH ROUTES ==========
 @app.post("/auth/register")
-async def register(user_data: UserRegister, db: Session = Depends(get_db)):
+async def register(user_data: UserRegister, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
     """
     Registers a new recruiter user.
 
     Args:
         user_data: The registration data for the new user.
+        background_tasks: FastAPI background tasks.
         db: The database session.
 
     Returns:
@@ -148,7 +149,7 @@ async def register(user_data: UserRegister, db: Session = Depends(get_db)):
     """
     try:
         if not InputValidation.validate_email(user_data.email):
-            raise HTTPException(status_code=400, detail="Invalid email format")
+            raise HTTPException(status_code=400, detail="Invalid email format. Please enter a valid email address (e.g. name@example.com).")
         if not InputValidation.validate_phone(user_data.phone_number):
             raise HTTPException(status_code=400, detail="Invalid phone number format")
 
@@ -173,13 +174,6 @@ async def register(user_data: UserRegister, db: Session = Depends(get_db)):
         if existing_email:
             raise HTTPException(status_code=400, detail="User with this email already exists")
 
-        # Send welcome email if email service is configured
-        if email_service:
-            try:
-                email_service.send_registration_email(user_data.email.lower(), user_data.full_name, "recruiter")
-            except Exception:
-                pass
-
         new_user = User(
             user_type='recruiter',
             phone_number=user_data.phone_number,
@@ -198,7 +192,16 @@ async def register(user_data: UserRegister, db: Session = Depends(get_db)):
 
         db.commit()
         db.refresh(new_user)
-        
+
+        # Dispatch welcome notification email immediately in background
+        if email_service:
+            background_tasks.add_task(
+                email_service.send_registration_email,
+                new_user.email,
+                new_user.full_name,
+                "recruiter"
+            )
+
         AuditLogger.log_event(
             event_type="REGISTER", user_id=new_user.id, user_email=new_user.email, status="SUCCESS"
         )

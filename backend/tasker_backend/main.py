@@ -2,8 +2,7 @@ from __future__ import annotations
 from typing import Optional, Dict, Any
 import sys
 import os
-from fastapi import FastAPI, Depends, HTTPException, status, Request
-from fastapi import FastAPI, Depends, HTTPException, status, Request
+from fastapi import FastAPI, Depends, HTTPException, status, Request, BackgroundTasks
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from pydantic import BaseModel
 import jwt
@@ -132,11 +131,11 @@ async def rate_limit_middleware_config(request: Request, call_next):
 
 # ========== AUTH ROUTES ==========
 @app.post("/auth/register")
-async def register(user_data: UserRegister, db: Session = Depends(get_db)):
+async def register(user_data: UserRegister, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
     try:
         # Validate input
         if not InputValidation.validate_email(user_data.email):
-            raise HTTPException(status_code=400, detail="Invalid email")
+            raise HTTPException(status_code=400, detail="Invalid email format. Please enter a valid email address (e.g. name@example.com).")
         
         if not InputValidation.validate_phone(user_data.phone_number):
             raise HTTPException(status_code=400, detail="Invalid phone")
@@ -160,13 +159,6 @@ async def register(user_data: UserRegister, db: Session = Depends(get_db)):
         if existing_email:
             raise HTTPException(status_code=400, detail="User with this email already exists")
 
-        # Send welcome email if email service is configured
-        if email_service:
-            try:
-                email_service.send_registration_email(user_data.email.lower(), user_data.full_name, "tasker")
-            except Exception:
-                pass
-
         new_user = User(
             phone_number=user_data.phone_number,
             password=PasswordSecurity.hash_password(user_data.password),
@@ -181,7 +173,6 @@ async def register(user_data: UserRegister, db: Session = Depends(get_db)):
         
         db.add(new_user)
         db.flush()
-        
 
         # Create wallet for the new tasker
         wallet = Wallet(user_id=new_user.id)
@@ -189,6 +180,15 @@ async def register(user_data: UserRegister, db: Session = Depends(get_db)):
         
         db.commit()
         db.refresh(new_user)
+
+        # Dispatch welcome notification email immediately in background
+        if email_service:
+            background_tasks.add_task(
+                email_service.send_registration_email,
+                new_user.email,
+                new_user.full_name,
+                "tasker"
+            )
         
 
         # Log successful registration
