@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:shared_theme/shared_theme.dart';
 import 'package:shared_models/shared_models.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'api_service.dart';
 
 enum AuthScreenView { welcome, signIn, signUp }
@@ -451,39 +453,66 @@ class _UserAuthScreenState extends State<UserAuthScreen> {
     });
 
     try {
-      await Future.delayed(const Duration(milliseconds: 600));
-      if (!mounted) return;
-
-      final googleUser = TasklyUser(
-        name: 'Alex Rivera',
-        email: 'alex.rivera@gmail.com',
-        password: '',
-        initials: 'AR',
-        location: 'Nairobi, Kenya',
-        rating: 5.0,
-        tasksCount: 4,
-        savedCount: 2,
+      await Supabase.instance.client.auth.signInWithOAuth(
+        OAuthProvider.google,
+        redirectTo: kIsWeb ? null : 'io.supabase.flutter://login-callback/',
       );
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Row(
-            children: [
-              const Icon(Icons.check_circle_rounded, color: Colors.white),
-              const SizedBox(width: 12),
-              Expanded(child: Text('Signed in with Google as ${googleUser.email}')),
-            ],
+      final user = Supabase.instance.client.auth.currentUser;
+      if (user != null) {
+        final email = user.email ?? '';
+        final fullName = (user.userMetadata?['full_name'] as String?) ??
+            (user.userMetadata?['name'] as String?) ??
+            (email.contains('@') ? email.split('@').first : 'User');
+        final initials = _getInitials(fullName);
+
+        final googleUser = TasklyUser(
+          name: fullName,
+          email: email,
+          password: '',
+          initials: initials,
+          location: 'Nairobi, Kenya',
+          rating: 5.0,
+          tasksCount: 0,
+          savedCount: 0,
+        );
+
+        // Sync with backend PostgreSQL database as recruiter
+        try {
+          await ApiService.googleSignIn(
+            email: email,
+            name: fullName,
+            photoUrl: user.userMetadata?['avatar_url'] as String?,
+            idToken: Supabase.instance.client.auth.currentSession?.accessToken,
+          );
+        } catch (_) {}
+
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                const Icon(Icons.check_circle_rounded, color: Colors.white),
+                const SizedBox(width: 12),
+                Expanded(child: Text('Signed in with Google as $email')),
+              ],
+            ),
+            backgroundColor: const Color(0xFF00B37E),
+            behavior: SnackBarBehavior.floating,
           ),
-          backgroundColor: const Color(0xFF00B37E),
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
+        );
 
-      widget.onAuthenticated(googleUser);
+        widget.onAuthenticated(googleUser);
+      }
+    } on AuthException catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _errorMessage = 'Supabase Google Sign-In error: ${e.message}';
+      });
     } catch (e) {
       if (!mounted) return;
       setState(() {
-        _errorMessage = 'Google Sign-In encountered an error.';
+        _errorMessage = 'Google Sign-In failed: $e';
       });
     } finally {
       if (mounted) {

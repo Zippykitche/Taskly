@@ -4,10 +4,22 @@ import 'package:shared_models/shared_models.dart';
 import 'package:shared_ui/shared_ui.dart';
 import 'package:shared_components/shared_components.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'auth_screen.dart';
 
-void main() {
+const String supabaseUrl = 'https://qnwjqdiwtxunjooiunsf.supabase.co';
+const String supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFud2pxZGl3dHh1bmpvb2l1bnNmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM1NjA1MjgsImV4cCI6MjA5OTEzNjUyOH0.JwquBu_bqARoddPSnraEytFDdV-9GwL5jgcYl5-4zZ4';
+
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  try {
+    await Supabase.initialize(
+      url: supabaseUrl,
+      anonKey: supabaseAnonKey,
+    );
+  } catch (e) {
+    debugPrint('Supabase init notice: $e');
+  }
   runApp(const TasklyTaskerApp());
 }
 
@@ -25,7 +37,41 @@ class _TasklyTaskerAppState extends State<TasklyTaskerApp> {
   @override
   void initState() {
     super.initState();
+    _setupSupabaseAuthListener();
     _loadSavedSession();
+  }
+
+  void _setupSupabaseAuthListener() {
+    try {
+      Supabase.instance.client.auth.onAuthStateChange.listen((data) {
+        final session = data.session;
+        final user = session?.user;
+        if (user != null && _authenticatedTasker == null) {
+          final email = user.email ?? '';
+          final fullName = (user.userMetadata?['full_name'] as String?) ??
+              (user.userMetadata?['name'] as String?) ??
+              (email.contains('@') ? email.split('@').first : 'Pro Tasker');
+          final parts = fullName.trim().split(RegExp(r'\s+'));
+          final avatar = parts.isNotEmpty
+              ? parts.map((e) => e.isNotEmpty ? e[0] : '').take(2).join().toUpperCase()
+              : 'PT';
+
+          final tasker = TaskerProfile(
+            name: fullName,
+            avatar: avatar.isNotEmpty ? avatar : 'PT',
+            skill: 'General Specialist',
+            rating: 5.0,
+            distance: '1.0 mi',
+            matchScore: 98,
+            completionRate: 100,
+            reviews: 1,
+            verified: true,
+          );
+
+          _handleLoginSuccess(tasker);
+        }
+      });
+    } catch (_) {}
   }
 
   Future<void> _loadSavedSession() async {
@@ -82,6 +128,7 @@ class _TasklyTaskerAppState extends State<TasklyTaskerApp> {
     });
 
     try {
+      await Supabase.instance.client.auth.signOut();
       final prefs = await SharedPreferences.getInstance();
       await prefs.remove('tasker_is_logged_in');
       await prefs.remove('tasker_name');

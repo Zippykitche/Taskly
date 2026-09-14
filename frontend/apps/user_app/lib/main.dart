@@ -5,10 +5,22 @@ import 'package:shared_ui/shared_ui.dart';
 import 'package:shared_components/shared_components.dart';
 import 'package:ai_mock/ai_mock.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'auth_screen.dart';
 
-void main() {
+const String supabaseUrl = 'https://qnwjqdiwtxunjooiunsf.supabase.co';
+const String supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFud2pxZGl3dHh1bmpvb2l1bnNmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM1NjA1MjgsImV4cCI6MjA5OTEzNjUyOH0.JwquBu_bqARoddPSnraEytFDdV-9GwL5jgcYl5-4zZ4';
+
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  try {
+    await Supabase.initialize(
+      url: supabaseUrl,
+      anonKey: supabaseAnonKey,
+    );
+  } catch (e) {
+    debugPrint('Supabase init notice: $e');
+  }
   runApp(const TasklyUserApp());
 }
 
@@ -26,7 +38,40 @@ class _TasklyUserAppState extends State<TasklyUserApp> {
   @override
   void initState() {
     super.initState();
+    _setupSupabaseAuthListener();
     _loadSavedSession();
+  }
+
+  void _setupSupabaseAuthListener() {
+    try {
+      Supabase.instance.client.auth.onAuthStateChange.listen((data) {
+        final session = data.session;
+        final user = session?.user;
+        if (user != null && _authenticatedUser == null) {
+          final email = user.email ?? '';
+          final fullName = (user.userMetadata?['full_name'] as String?) ??
+              (user.userMetadata?['name'] as String?) ??
+              (email.contains('@') ? email.split('@').first : 'User');
+          final parts = fullName.trim().split(RegExp(r'\s+'));
+          final initials = parts.isNotEmpty
+              ? parts.map((e) => e.isNotEmpty ? e[0] : '').take(2).join().toUpperCase()
+              : 'U';
+
+          final authedUser = TasklyUser(
+            name: fullName,
+            email: email,
+            password: '',
+            initials: initials.isNotEmpty ? initials : 'U',
+            location: 'Nairobi, Kenya',
+            rating: 5.0,
+            tasksCount: 0,
+            savedCount: 0,
+          );
+
+          _handleLoginSuccess(authedUser);
+        }
+      });
+    } catch (_) {}
   }
 
   Future<void> _loadSavedSession() async {
@@ -84,6 +129,7 @@ class _TasklyUserAppState extends State<TasklyUserApp> {
     });
 
     try {
+      await Supabase.instance.client.auth.signOut();
       final prefs = await SharedPreferences.getInstance();
       await prefs.remove('user_is_logged_in');
       await prefs.remove('user_name');

@@ -2,6 +2,7 @@ from __future__ import annotations
 from typing import Optional, Dict, Any
 import sys
 import os
+import hashlib
 from fastapi import FastAPI, Depends, HTTPException, status, Request, BackgroundTasks
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from pydantic import BaseModel
@@ -79,6 +80,12 @@ class Token(BaseModel):
     token_type: str
     user: Optional[Dict[str, Any]] = None
 
+class GoogleAuthRequest(BaseModel):
+    email: str
+    full_name: Optional[str] = None
+    photo_url: Optional[str] = None
+    id_token: Optional[str] = None
+
 class UploadImage(BaseModel):
     job_id: int
     image_type: str
@@ -111,7 +118,10 @@ async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = De
         if phone is None:
             raise HTTPException(status_code=401, detail="Invalid token")
         
-        user = db.query(User).filter(User.phone_number == phone, User.user_type == 'tasker').first()
+        user = db.query(User).filter(
+            or_(User.phone_number == phone, User.email == phone),
+            User.user_type == 'tasker'
+        ).first()
         if not user:
             raise HTTPException(status_code=401, detail="User not found")
         
@@ -279,6 +289,116 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = 
         if "connection" in error_msg or "operationalerror" in error_msg:
             raise HTTPException(status_code=503, detail="Database service temporarily unavailable. Please try again in a moment.")
         raise HTTPException(status_code=400, detail="Invalid phone number or password.")
+
+@app.post("/auth/google")
+async def google_auth(
+    auth_data: GoogleAuthRequest,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db)
+):
+    """
+    Authenticate or register a tasker using Google Sign-In.
+    If the account does not exist, it is created automatically in Supabase PostgreSQL,
+    wallet is initialized, and a welcome notification email is dispatched immediately.
+    """
+    try:
+        clean_email = (auth_data.email or "").strip().lower()
+        if not clean_email or not InputValidation.validate_email(clean_email):
+            raise HTTPException(status_code=400, detail="Invalid Google email address.")
+
+        display_name = (auth_data.full_name or "").strip()
+        if not display_name:
+            display_name = clean_email.split("@")[0].replace(".", " ").title()
+
+        user = db.query(User).filter(
+            User.email == clean_email,
+            User.user_type == "tasker"
+        ).first()
+
+        is_new_user = False
+        if not user:
+            is_new_user = True
+            phone_hash = hashlib.sha256(clean_email.encode()).hexdigest()[:8]
+            google_phone = f"+g_{phone_hash}"
+
+            user = User(
+                email=clean_email,
+                phone_number=google_phone,
+                password=PasswordSecurity.hash_password(os.urandom(24).hex()),
+                full_name=InputValidation.sanitize_string(display_name),
+                user_type="tasker",
+                location_city="Nairobi",
+                location_area="Westlands",
+                profile_picture_url=auth_data.photo_url,
+                rating=5.0,
+                total_jobs=0
+            )
+            db.add(user)
+            db.flush()
+
+            wallet = Wallet(user_id=user.id)
+            db.add(wallet)
+
+            db.commit()
+            db.refresh(user)
+
+            if email_service:
+                background_tasks.add_task(
+                    email_service.send_registration_email,
+                    user.email,
+                    user.full_name,
+                    "tasker"
+                )
+
+            AuditLogger.log_event(
+                event_type="REGISTER_GOOGLE",
+                user_id=user.id,
+                user_email=user.email,
+                status="SUCCESS"
+            )
+        else:
+            if auth_data.photo_url and not user.profile_picture_url:
+                user.profile_picture_url = auth_data.photo_url
+                db.commit()
+                db.refresh(user)
+
+            AuditLogger.log_event(
+                event_type="LOGIN_GOOGLE",
+                user_id=user.id,
+                user_email=user.email,
+                status="SUCCESS"
+            )
+
+        access_token = JWTSecurity.create_access_token(data={"sub": user.email or user.phone_number})
+
+        return {
+            "access_token": access_token,
+            "token_type": "bearer",
+            "is_new_user": is_new_user,
+            "user": {
+                "id": user.id,
+                "full_name": user.full_name,
+                "email": user.email,
+                "phone_number": user.phone_number,
+                "location_city": user.location_city or "Nairobi",
+                "location_area": user.location_area or "Westlands",
+                "rating": user.rating or 5.0,
+                "total_jobs": user.total_jobs or 0,
+                "profile_picture_url": user.profile_picture_url,
+            },
+            "message": "Signed in successfully with Google."
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        AuditLogger.log_event(
+            event_type="GOOGLE_AUTH_ERROR",
+            user_email=auth_data.email if 'auth_data' in locals() else None,
+            status="ERROR",
+            details={"error": str(e)}
+        )
+        raise HTTPException(status_code=400, detail=f"Google authentication failed: {str(e)}")
 
 # ========== JOB ROUTES ==========
 @app.get("/jobs/browse")

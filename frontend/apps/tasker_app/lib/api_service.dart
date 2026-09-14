@@ -109,4 +109,54 @@ class ApiService {
       };
     }
   }
+
+  static Future<Map<String, dynamic>> googleSignIn({
+    required String email,
+    String? name,
+    String? photoUrl,
+    String? idToken,
+  }) async {
+    final url = Uri.parse('$baseUrl/auth/google');
+    try {
+      final response = await http.post(
+        url,
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'email': email.trim().toLowerCase(),
+          'full_name': name?.trim(),
+          'photo_url': photoUrl,
+          'id_token': idToken,
+        }),
+      );
+
+      dynamic data;
+      try {
+        data = jsonDecode(response.body);
+      } catch (_) {}
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        return {
+          'success': true,
+          'access_token': data is Map ? data['access_token'] : null,
+          'user': data is Map ? data['user'] : null,
+          'message': data is Map && data.containsKey('message')
+              ? data['message']
+              : 'Signed in with Google successfully!',
+        };
+      } else {
+        final errorMsg = data is Map && data.containsKey('detail')
+            ? data['detail'].toString()
+            : 'Google authentication failed.';
+        return {
+          'success': false,
+          'message': errorMsg,
+        };
+      }
+    } catch (e) {
+      return {
+        'success': false,
+        'message': 'Unable to connect to server. Please try again.',
+      };
+    }
+  }
 }

@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:shared_theme/shared_theme.dart';
 import 'package:shared_models/shared_models.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'api_service.dart';
 
 enum TaskerAuthScreenView { welcome, signIn, signUp }
@@ -467,40 +469,67 @@ class _TaskerAuthScreenState extends State<TaskerAuthScreen> {
     });
 
     try {
-      await Future.delayed(const Duration(milliseconds: 600));
-      if (!mounted) return;
-
-      final googleTasker = TaskerProfile(
-        name: 'Jordan Hayes',
-        avatar: 'JH',
-        skill: 'General Repair & Assembly Specialist',
-        rating: 5.0,
-        distance: '0.9 mi',
-        matchScore: 97,
-        completionRate: 100,
-        reviews: 14,
-        verified: true,
+      await Supabase.instance.client.auth.signInWithOAuth(
+        OAuthProvider.google,
+        redirectTo: kIsWeb ? null : 'io.supabase.flutter://login-callback/',
       );
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Row(
-            children: [
-              const Icon(Icons.check_circle_rounded, color: Colors.white),
-              const SizedBox(width: 12),
-              Expanded(child: Text('Signed in as Pro Tasker: ${googleTasker.name} (Google)')),
-            ],
+      final user = Supabase.instance.client.auth.currentUser;
+      if (user != null) {
+        final email = user.email ?? '';
+        final fullName = (user.userMetadata?['full_name'] as String?) ??
+            (user.userMetadata?['name'] as String?) ??
+            (email.contains('@') ? email.split('@').first : 'Pro Tasker');
+        final avatar = _getInitials(fullName);
+
+        final googleTasker = TaskerProfile(
+          name: fullName,
+          avatar: avatar,
+          skill: '$_selectedCategory Specialist',
+          rating: 5.0,
+          distance: '0.9 mi',
+          matchScore: 98,
+          completionRate: 100,
+          reviews: 1,
+          verified: true,
+        );
+
+        // Sync with backend PostgreSQL database as tasker
+        try {
+          await ApiService.googleSignIn(
+            email: email,
+            name: fullName,
+            photoUrl: user.userMetadata?['avatar_url'] as String?,
+            idToken: Supabase.instance.client.auth.currentSession?.accessToken,
+          );
+        } catch (_) {}
+
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                const Icon(Icons.check_circle_rounded, color: Colors.white),
+                const SizedBox(width: 12),
+                Expanded(child: Text('Signed in as Pro Tasker: $fullName')),
+              ],
+            ),
+            backgroundColor: const Color(0xFF00B37E),
+            behavior: SnackBarBehavior.floating,
           ),
-          backgroundColor: const Color(0xFF00B37E),
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
+        );
 
-      widget.onAuthenticated(googleTasker);
+        widget.onAuthenticated(googleTasker);
+      }
+    } on AuthException catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _errorMessage = 'Supabase Google Sign-In error: ${e.message}';
+      });
     } catch (e) {
       if (!mounted) return;
       setState(() {
-        _errorMessage = 'Google Pro Sign-In encountered an error.';
+        _errorMessage = 'Google Sign-In failed: $e';
       });
     } finally {
       if (mounted) {
