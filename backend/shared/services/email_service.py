@@ -25,11 +25,13 @@ class EmailService:
             self.sendgrid_api_key = None  # ignore default placeholder
 
         # Sender identity
+        resend_default_from = "onboarding@resend.dev" if self.resend_api_key else "noreply@taskly.com"
         self.from_email = (
-            os.getenv("SMTP_FROM_EMAIL")
+            os.getenv("RESEND_FROM_EMAIL")
+            or os.getenv("SMTP_FROM_EMAIL")
             or os.getenv("SENDGRID_FROM_EMAIL")
             or self.smtp_user
-            or "noreply@taskly.com"
+            or resend_default_from
         )
         self.from_name = os.getenv("EMAIL_FROM_NAME", "Taskly")
 
