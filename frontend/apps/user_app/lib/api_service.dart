@@ -61,17 +61,20 @@ class ApiService {
           'message': errorMsg,
         };
       } else {
+        final errorMsg = data is Map && data.containsKey('detail')
+            ? data['detail'].toString()
+            : (data is Map && data.containsKey('message')
+                ? data['message'].toString()
+                : 'Registration failed (${response.statusCode}). Please try again.');
         return {
-          'success': true,
-          'message': 'Registration successful! An activation link has been sent to $email.',
-          'user_id': 'mock-local-id',
+          'success': false,
+          'message': errorMsg,
         };
       }
     } catch (e) {
       return {
-        'success': true,
-        'message': 'Registration successful! An activation link has been sent to $email.',
-        'user_id': 'mock-local-id',
+        'success': false,
+        'message': 'Failed to connect to server: $e',
       };
     }
   }

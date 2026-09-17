@@ -60,6 +60,24 @@ image_verifier = ImageVerification()
 email_service = EmailService()
 # mpesa_service = MpesaService()
 
+@app.get("/health")
+async def health_check(db: Session = Depends(get_db)):
+    db_status = "connected"
+    db_error = None
+    try:
+        db.execute(text("SELECT 1"))
+    except Exception as e:
+        db_status = "error"
+        db_error = str(e)
+
+    return {
+        "status": "healthy" if db_status == "connected" else "degraded",
+        "database": db_status,
+        "database_error": db_error,
+        "resend_configured": bool(os.getenv("RESEND_API_KEY")),
+        "service": "tasker_backend"
+    }
+
 # ========== SCHEMAS ==========
 class UserRegister(BaseModel):
     phone_number: str

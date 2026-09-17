@@ -6,9 +6,7 @@ from sqlalchemy.orm import declarative_base, sessionmaker
 
 load_dotenv()
 
-DATABASE_URL = os.getenv(
-    "DATABASE_URL", "postgresql+psycopg://postgres:jayjose@localhost:5432/taskly_db"
-)
+DATABASE_URL = os.getenv("DATABASE_URL") or os.getenv("DIRECT_URL") or "postgresql+psycopg://postgres:jayjose@localhost:5432/taskly_db"
 
 if DATABASE_URL.startswith("postgresql://"):
     DATABASE_URL = DATABASE_URL.replace("postgresql://", "postgresql+psycopg://", 1)
