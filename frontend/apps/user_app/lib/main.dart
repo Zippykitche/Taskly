@@ -99,6 +99,9 @@ class _TasklyUserAppState extends State<TasklyUserApp> {
         final isVerified = prefs.getBool('user_is_verified') ?? false;
         final idNumber = prefs.getString('user_id_number');
         final photoUrl = prefs.getString('user_profile_photo');
+        final phone = prefs.getString('user_phone');
+        final savedAddresses = prefs.getStringList('user_saved_addresses') ?? [location];
+        final paymentMethods = prefs.getStringList('user_payment_methods') ?? [];
 
         setState(() {
           _authenticatedUser = TasklyUser(
@@ -107,12 +110,15 @@ class _TasklyUserAppState extends State<TasklyUserApp> {
             password: '',
             initials: initials,
             location: location,
+            phone: phone,
             rating: rating,
             tasksCount: tasksCount,
             savedCount: 0,
             isVerified: isVerified,
             idNumber: idNumber,
             profilePictureUrl: photoUrl,
+            savedAddresses: savedAddresses,
+            paymentMethods: paymentMethods,
           );
         });
       }
@@ -140,6 +146,9 @@ class _TasklyUserAppState extends State<TasklyUserApp> {
       await prefs.setBool('user_is_verified', user.isVerified);
       if (user.idNumber != null) await prefs.setString('user_id_number', user.idNumber!);
       if (user.profilePictureUrl != null) await prefs.setString('user_profile_photo', user.profilePictureUrl!);
+      if (user.phone != null) await prefs.setString('user_phone', user.phone!);
+      if (user.savedAddresses.isNotEmpty) await prefs.setStringList('user_saved_addresses', user.savedAddresses);
+      if (user.paymentMethods.isNotEmpty) await prefs.setStringList('user_payment_methods', user.paymentMethods);
     } catch (_) {}
   }
 
@@ -810,23 +819,43 @@ class _UserMainNavigationScreenState extends State<UserMainNavigationScreen> {
                             fontWeight: FontWeight.w500,
                           ),
                         ),
-                        const SizedBox(height: 8),
+                        const SizedBox(height: 6),
                         Row(
                           children: [
-                            RatingStars(rating: _currentUser.rating),
-                            const SizedBox(width: 12),
-                            Text(
-                              '${_currentUser.tasksCount} tasks completed',
-                              style: TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w600,
-                                color: AppColors.textMuted,
+                            Icon(Icons.location_on_outlined, size: 14, color: AppColors.primary),
+                            const SizedBox(width: 4),
+                            Expanded(
+                              child: Text(
+                                _currentUser.location,
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                  color: AppColors.textSecondary,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
                               ),
                             ),
+                            if (_currentUser.phone != null && _currentUser.phone!.isNotEmpty) ...[
+                              const SizedBox(width: 6),
+                              Text(
+                                '• ${_currentUser.phone}',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w500,
+                                  color: AppColors.textMuted,
+                                ),
+                              ),
+                            ],
                           ],
                         ),
                       ],
                     ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.edit_outlined, size: 20),
+                    tooltip: 'Edit Profile Details',
+                    onPressed: _showEditProfileModal,
                   ),
                 ],
               ),
@@ -926,6 +955,31 @@ class _UserMainNavigationScreenState extends State<UserMainNavigationScreen> {
 
             // Account Options
             _buildProfileOption(
+              icon: Icons.person_outline_rounded,
+              title: 'Edit Profile Details',
+              subtitle: 'Name, phone number & location',
+              onTap: _showEditProfileModal,
+            ),
+            const SizedBox(height: 12),
+            _buildProfileOption(
+              icon: Icons.location_on_rounded,
+              title: 'Saved Addresses',
+              subtitle: _currentUser.savedAddresses.isEmpty
+                  ? _currentUser.location
+                  : '${_currentUser.savedAddresses.length} saved address${_currentUser.savedAddresses.length > 1 ? "es" : ""}',
+              onTap: _showAddressesModal,
+            ),
+            const SizedBox(height: 12),
+            _buildProfileOption(
+              icon: Icons.payment_rounded,
+              title: 'Payment Methods',
+              subtitle: _currentUser.paymentMethods.isEmpty
+                  ? 'Add M-Pesa or Card'
+                  : '${_currentUser.paymentMethods.length} payment method${_currentUser.paymentMethods.length > 1 ? "s" : ""} linked',
+              onTap: _showPaymentMethodsModal,
+            ),
+            const SizedBox(height: 12),
+            _buildProfileOption(
               icon: Icons.dark_mode_rounded,
               title: 'Appearance / Theme',
               subtitle: AppColors.isDarkMode ? 'Dark Mode' : 'Light Mode',
@@ -936,20 +990,6 @@ class _UserMainNavigationScreenState extends State<UserMainNavigationScreen> {
                   AppTheme.themeModeNotifier.value = val ? ThemeMode.dark : ThemeMode.light;
                 },
               ),
-            ),
-            const SizedBox(height: 12),
-            _buildProfileOption(
-              icon: Icons.location_on_rounded,
-              title: 'Saved Addresses',
-              subtitle: _currentUser.location,
-              onTap: () {},
-            ),
-            const SizedBox(height: 12),
-            _buildProfileOption(
-              icon: Icons.payment_rounded,
-              title: 'Payment Methods',
-              subtitle: 'Add M-Pesa or Card',
-              onTap: () {},
             ),
             const SizedBox(height: 12),
             _buildProfileOption(
@@ -1617,6 +1657,777 @@ class _UserMainNavigationScreenState extends State<UserMainNavigationScreen> {
         taskerName: taskerName,
         initials: initials,
         taskTitle: taskTitle,
+      ),
+    );
+  }
+
+  void _showEditProfileModal() {
+    final nameController = TextEditingController(text: _currentUser.name);
+    final phoneController = TextEditingController(text: _currentUser.phone ?? '');
+    final locationController = TextEditingController(text: _currentUser.location);
+    String selectedPhoto = _currentUser.profilePictureUrl ?? '';
+
+    final avatarPresets = [
+      'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=256&q=80',
+      'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=256&q=80',
+      'https://images.unsplash.com/photo-1517841905240-472988babdf9?auto=format&fit=crop&w=256&q=80',
+      'https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?auto=format&fit=crop&w=256&q=80',
+    ];
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setModalState) {
+          return Container(
+            height: MediaQuery.of(context).size.height * 0.85,
+            decoration: BoxDecoration(
+              color: AppColors.surface,
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(AppRadius.xl)),
+            ),
+            padding: EdgeInsets.fromLTRB(20, 16, 20, MediaQuery.of(context).viewInsets.bottom + 20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(
+                  child: Container(
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: AppColors.border,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      'Edit Profile Details',
+                      style: context.type.titleLarge?.copyWith(fontWeight: FontWeight.w900),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.close_rounded),
+                      onPressed: () => Navigator.pop(context),
+                    ),
+                  ],
+                ),
+                const Divider(height: 24),
+                Expanded(
+                  child: ListView(
+                    children: [
+                      Center(
+                        child: Column(
+                          children: [
+                            TasklyAvatar(
+                              initials: _currentUser.initials,
+                              imageUrl: selectedPhoto.isNotEmpty ? selectedPhoto : null,
+                              size: 76,
+                              verified: _currentUser.isVerified,
+                            ),
+                            const SizedBox(height: 10),
+                            Text(
+                              'Choose Profile Picture',
+                              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.textSecondary),
+                            ),
+                            const SizedBox(height: 10),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: avatarPresets.map((preset) {
+                                final isSelected = selectedPhoto == preset;
+                                return GestureDetector(
+                                  onTap: () => setModalState(() => selectedPhoto = preset),
+                                  child: Container(
+                                    margin: const EdgeInsets.symmetric(horizontal: 6),
+                                    padding: const EdgeInsets.all(2),
+                                    decoration: BoxDecoration(
+                                      shape: BoxShape.circle,
+                                      border: Border.all(
+                                        color: isSelected ? AppColors.primary : Colors.transparent,
+                                        width: 2.5,
+                                      ),
+                                    ),
+                                    child: CircleAvatar(
+                                      radius: 22,
+                                      backgroundImage: NetworkImage(preset),
+                                    ),
+                                  ),
+                                );
+                              }).toList(),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 24),
+                      TextField(
+                        controller: nameController,
+                        decoration: const InputDecoration(
+                          labelText: 'Full Name',
+                          prefixIcon: Icon(Icons.person_outline_rounded),
+                        ),
+                      ),
+                      const SizedBox(height: 14),
+                      TextField(
+                        controller: phoneController,
+                        keyboardType: TextInputType.phone,
+                        decoration: const InputDecoration(
+                          labelText: 'Phone Number (M-Pesa / Bookings)',
+                          hintText: 'e.g. +254 712 345 678',
+                          prefixIcon: Icon(Icons.phone_outlined),
+                        ),
+                      ),
+                      const SizedBox(height: 14),
+                      TextField(
+                        controller: locationController,
+                        decoration: const InputDecoration(
+                          labelText: 'Default Area / Location',
+                          hintText: 'e.g. Westlands, Nairobi',
+                          prefixIcon: Icon(Icons.location_on_outlined),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 12),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: () async {
+                      final name = nameController.text.trim();
+                      final phone = phoneController.text.trim();
+                      final loc = locationController.text.trim();
+
+                      if (name.isEmpty) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Name cannot be empty.')),
+                        );
+                        return;
+                      }
+
+                      final parts = name.split(RegExp(r'\s+'));
+                      final initials = parts.isNotEmpty
+                          ? parts.map((e) => e.isNotEmpty ? e[0] : '').take(2).join().toUpperCase()
+                          : _currentUser.initials;
+
+                      final updatedUser = _currentUser.copyWith(
+                        name: name,
+                        initials: initials,
+                        phone: phone.isNotEmpty ? phone : null,
+                        location: loc.isNotEmpty ? loc : _currentUser.location,
+                        profilePictureUrl: selectedPhoto.isNotEmpty ? selectedPhoto : _currentUser.profilePictureUrl,
+                      );
+
+                      setState(() {
+                        _currentUser = updatedUser;
+                      });
+
+                      try {
+                        final prefs = await SharedPreferences.getInstance();
+                        await prefs.setString('user_name', name);
+                        await prefs.setString('user_initials', initials);
+                        if (phone.isNotEmpty) await prefs.setString('user_phone', phone);
+                        if (loc.isNotEmpty) await prefs.setString('user_location', loc);
+                        if (selectedPhoto.isNotEmpty) await prefs.setString('user_profile_photo', selectedPhoto);
+                      } catch (_) {}
+
+                      if (!ctx.mounted) return;
+                      Navigator.pop(ctx);
+                      ScaffoldMessenger.of(ctx).showSnackBar(
+                        const SnackBar(
+                          content: Text('Profile details updated successfully!'),
+                          behavior: SnackBarBehavior.floating,
+                        ),
+                      );
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.primary,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.md)),
+                    ),
+                    child: const Text('Save Profile Changes', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 15)),
+                  ),
+                ),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  void _showAddressesModal() {
+    final addresses = List<String>.from(
+      _currentUser.savedAddresses.isNotEmpty
+          ? _currentUser.savedAddresses
+          : [_currentUser.location],
+    );
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setModalState) {
+          return Container(
+            height: MediaQuery.of(context).size.height * 0.80,
+            decoration: BoxDecoration(
+              color: AppColors.surface,
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(AppRadius.xl)),
+            ),
+            padding: EdgeInsets.fromLTRB(20, 16, 20, MediaQuery.of(context).viewInsets.bottom + 20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(
+                  child: Container(
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: AppColors.border,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Saved Addresses',
+                          style: context.type.titleLarge?.copyWith(fontWeight: FontWeight.w900),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          'Manage your service delivery and home locations',
+                          style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
+                        ),
+                      ],
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.close_rounded),
+                      onPressed: () => Navigator.pop(context),
+                    ),
+                  ],
+                ),
+                const Divider(height: 24),
+                Expanded(
+                  child: addresses.isEmpty
+                      ? Center(
+                          child: Text(
+                            'No saved addresses. Add an address below.',
+                            style: TextStyle(color: AppColors.textSecondary),
+                          ),
+                        )
+                      : ListView.separated(
+                          itemCount: addresses.length,
+                          separatorBuilder: (_, __) => const SizedBox(height: 10),
+                          itemBuilder: (context, index) {
+                            final addr = addresses[index];
+                            final isDefault = index == 0;
+                            return Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                              decoration: AppCards.surface(radius: AppRadius.md),
+                              child: Row(
+                                children: [
+                                  Container(
+                                    padding: const EdgeInsets.all(8),
+                                    decoration: BoxDecoration(
+                                      color: AppColors.primary.withValues(alpha: 0.12),
+                                      shape: BoxShape.circle,
+                                    ),
+                                    child: Icon(Icons.location_on_rounded, color: AppColors.primary, size: 20),
+                                  ),
+                                  const SizedBox(width: 14),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          addr,
+                                          style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
+                                        ),
+                                        if (isDefault) ...[
+                                          const SizedBox(height: 2),
+                                          Container(
+                                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                                            decoration: BoxDecoration(
+                                              color: AppColors.primary.withValues(alpha: 0.15),
+                                              borderRadius: BorderRadius.circular(4),
+                                            ),
+                                            child: Text(
+                                              'Default Address',
+                                              style: TextStyle(color: AppColors.primary, fontSize: 10, fontWeight: FontWeight.w800),
+                                            ),
+                                          ),
+                                        ],
+                                      ],
+                                    ),
+                                  ),
+                                  if (addresses.length > 1)
+                                    IconButton(
+                                      icon: const Icon(Icons.delete_outline_rounded, size: 20, color: Colors.redAccent),
+                                      onPressed: () async {
+                                        setModalState(() {
+                                          addresses.removeAt(index);
+                                        });
+                                        setState(() {
+                                          _currentUser = _currentUser.copyWith(
+                                            savedAddresses: addresses,
+                                            location: addresses.isNotEmpty ? addresses.first : _currentUser.location,
+                                          );
+                                        });
+                                        try {
+                                          final prefs = await SharedPreferences.getInstance();
+                                          await prefs.setStringList('user_saved_addresses', addresses);
+                                        } catch (_) {}
+                                      },
+                                    ),
+                                ],
+                              ),
+                            );
+                          },
+                        ),
+                ),
+                const SizedBox(height: 12),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton.icon(
+                    onPressed: () {
+                      _showAddAddressDialog(context, (newAddr) async {
+                        setModalState(() {
+                          addresses.add(newAddr);
+                        });
+                        setState(() {
+                          _currentUser = _currentUser.copyWith(savedAddresses: addresses);
+                        });
+                        try {
+                          final prefs = await SharedPreferences.getInstance();
+                          await prefs.setStringList('user_saved_addresses', addresses);
+                        } catch (_) {}
+                      });
+                    },
+                    icon: const Icon(Icons.add_location_alt_outlined),
+                    label: const Text('Add New Address', style: TextStyle(fontWeight: FontWeight.w800)),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.primary,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.md)),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  void _showAddAddressDialog(BuildContext parentContext, ValueChanged<String> onAdded) {
+    final labelController = TextEditingController(text: 'Home');
+    final streetController = TextEditingController();
+    String selectedCounty = 'Nairobi';
+
+    showDialog(
+      context: parentContext,
+      builder: (dCtx) => AlertDialog(
+        title: const Text('Add New Address', style: TextStyle(fontWeight: FontWeight.w900)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: labelController,
+              decoration: const InputDecoration(
+                labelText: 'Address Label (e.g. Home, Office, Gym)',
+              ),
+            ),
+            const SizedBox(height: 12),
+            DropdownButtonFormField<String>(
+              value: selectedCounty,
+              decoration: const InputDecoration(labelText: 'County'),
+              items: kenyaCountiesAndLocations.keys
+                  .take(8)
+                  .map((c) => DropdownMenuItem(value: c, child: Text(c)))
+                  .toList(),
+              onChanged: (v) {
+                if (v != null) selectedCounty = v;
+              },
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: streetController,
+              decoration: const InputDecoration(
+                labelText: 'Specific Area / Estate / Street',
+                hintText: 'e.g. Kilimani, Argwings Kodhek Rd',
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dCtx),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              final street = streetController.text.trim();
+              final label = labelController.text.trim();
+              if (street.isEmpty) return;
+              final fullAddress = '$label: $street, $selectedCounty';
+              onAdded(fullAddress);
+              Navigator.pop(dCtx);
+            },
+            child: const Text('Add Address'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showPaymentMethodsModal() {
+    final paymentMethods = List<String>.from(_currentUser.paymentMethods);
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setModalState) {
+          return Container(
+            height: MediaQuery.of(context).size.height * 0.80,
+            decoration: BoxDecoration(
+              color: AppColors.surface,
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(AppRadius.xl)),
+            ),
+            padding: EdgeInsets.fromLTRB(20, 16, 20, MediaQuery.of(context).viewInsets.bottom + 20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(
+                  child: Container(
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: AppColors.border,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Payment Methods',
+                          style: context.type.titleLarge?.copyWith(fontWeight: FontWeight.w900),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          'Add M-Pesa or Card to pay for booked services',
+                          style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
+                        ),
+                      ],
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.close_rounded),
+                      onPressed: () => Navigator.pop(context),
+                    ),
+                  ],
+                ),
+                const Divider(height: 24),
+                Expanded(
+                  child: paymentMethods.isEmpty
+                      ? Center(
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.payment_rounded, size: 48, color: AppColors.textMuted),
+                              const SizedBox(height: 12),
+                              const Text(
+                                'No payment methods linked',
+                                style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                'Link M-Pesa or a Visa/Mastercard to pay taskers seamlessly.',
+                                textAlign: TextAlign.center,
+                                style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
+                              ),
+                            ],
+                          ),
+                        )
+                      : ListView.separated(
+                          itemCount: paymentMethods.length,
+                          separatorBuilder: (_, __) => const SizedBox(height: 12),
+                          itemBuilder: (context, index) {
+                            final method = paymentMethods[index];
+                            final isMpesa = method.toLowerCase().contains('m-pesa') || method.toLowerCase().contains('mpesa');
+                            return Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                              decoration: AppCards.surface(radius: AppRadius.md),
+                              child: Row(
+                                children: [
+                                  Container(
+                                    padding: const EdgeInsets.all(10),
+                                    decoration: BoxDecoration(
+                                      color: (isMpesa ? const Color(0xFF00B37E) : AppColors.primary).withValues(alpha: 0.15),
+                                      shape: BoxShape.circle,
+                                    ),
+                                    child: Icon(
+                                      isMpesa ? Icons.phone_android_rounded : Icons.credit_card_rounded,
+                                      color: isMpesa ? const Color(0xFF00B37E) : AppColors.primary,
+                                      size: 22,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 14),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          method,
+                                          style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 14),
+                                        ),
+                                        const SizedBox(height: 2),
+                                        Text(
+                                          index == 0 ? 'Default Payment Method' : 'Secondary Method',
+                                          style: TextStyle(
+                                            color: index == 0 ? AppColors.primary : AppColors.textMuted,
+                                            fontSize: 11,
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  IconButton(
+                                    icon: const Icon(Icons.delete_outline_rounded, size: 20, color: Colors.redAccent),
+                                    onPressed: () async {
+                                      setModalState(() {
+                                        paymentMethods.removeAt(index);
+                                      });
+                                      setState(() {
+                                        _currentUser = _currentUser.copyWith(paymentMethods: paymentMethods);
+                                      });
+                                      try {
+                                        final prefs = await SharedPreferences.getInstance();
+                                        await prefs.setStringList('user_payment_methods', paymentMethods);
+                                      } catch (_) {}
+                                    },
+                                  ),
+                                ],
+                              ),
+                            );
+                          },
+                        ),
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: () {
+                          _showAddMpesaDialog(context, (newMethod) async {
+                            setModalState(() {
+                              paymentMethods.add(newMethod);
+                            });
+                            setState(() {
+                              _currentUser = _currentUser.copyWith(paymentMethods: paymentMethods);
+                            });
+                            try {
+                              final prefs = await SharedPreferences.getInstance();
+                              await prefs.setStringList('user_payment_methods', paymentMethods);
+                            } catch (_) {}
+                          });
+                        },
+                        icon: const Icon(Icons.phone_android_rounded, color: Color(0xFF00B37E), size: 18),
+                        label: const Text('Add M-Pesa', style: TextStyle(fontWeight: FontWeight.w800, color: Color(0xFF00B37E))),
+                        style: OutlinedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          side: const BorderSide(color: Color(0xFF00B37E)),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.md)),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: ElevatedButton.icon(
+                        onPressed: () {
+                          _showAddCardDialog(context, (newMethod) async {
+                            setModalState(() {
+                              paymentMethods.add(newMethod);
+                            });
+                            setState(() {
+                              _currentUser = _currentUser.copyWith(paymentMethods: paymentMethods);
+                            });
+                            try {
+                              final prefs = await SharedPreferences.getInstance();
+                              await prefs.setStringList('user_payment_methods', paymentMethods);
+                            } catch (_) {}
+                          });
+                        },
+                        icon: const Icon(Icons.credit_card_rounded, size: 18),
+                        label: const Text('Add Card', style: TextStyle(fontWeight: FontWeight.w800)),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppColors.primary,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.md)),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  void _showAddMpesaDialog(BuildContext parentContext, ValueChanged<String> onAdded) {
+    final phoneController = TextEditingController(text: _currentUser.phone ?? '+254 7');
+    final nameController = TextEditingController(text: _currentUser.name);
+
+    showDialog(
+      context: parentContext,
+      builder: (dCtx) => AlertDialog(
+        title: Row(
+          children: const [
+            Icon(Icons.phone_android_rounded, color: Color(0xFF00B37E)),
+            SizedBox(width: 8),
+            Text('Link M-Pesa Account', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 16)),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: phoneController,
+              keyboardType: TextInputType.phone,
+              decoration: const InputDecoration(
+                labelText: 'M-Pesa Registered Mobile Number',
+                hintText: 'e.g. +254 712 345 678',
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: nameController,
+              decoration: const InputDecoration(
+                labelText: 'Account / Subscriber Name',
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dCtx),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              final phone = phoneController.text.trim();
+              final name = nameController.text.trim();
+              if (phone.length < 8) return;
+              onAdded('M-Pesa: $phone ($name)');
+              Navigator.pop(dCtx);
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF00B37E),
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Link M-Pesa'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showAddCardDialog(BuildContext parentContext, ValueChanged<String> onAdded) {
+    final cardHolderController = TextEditingController(text: _currentUser.name);
+    final cardNumberController = TextEditingController();
+    final expiryController = TextEditingController();
+
+    showDialog(
+      context: parentContext,
+      builder: (dCtx) => AlertDialog(
+        title: Row(
+          children: const [
+            Icon(Icons.credit_card_rounded, color: Color(0xFF137A5C)),
+            SizedBox(width: 8),
+            Text('Link Debit / Credit Card', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 16)),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: cardHolderController,
+              decoration: const InputDecoration(labelText: 'Cardholder Name'),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: cardNumberController,
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(
+                labelText: 'Card Number',
+                hintText: '4242 •••• •••• 1234',
+              ),
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: expiryController,
+                    decoration: const InputDecoration(
+                      labelText: 'Expiry',
+                      hintText: 'MM/YY',
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                const Expanded(
+                  child: TextField(
+                    obscureText: true,
+                    decoration: InputDecoration(
+                      labelText: 'CVV',
+                      hintText: '123',
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dCtx),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              final number = cardNumberController.text.replaceAll(' ', '').trim();
+              final holder = cardHolderController.text.trim();
+              if (number.length < 4) return;
+              final last4 = number.substring(number.length - 4);
+              onAdded('Visa ending in $last4 ($holder)');
+              Navigator.pop(dCtx);
+            },
+            child: const Text('Link Card'),
+          ),
+        ],
       ),
     );
   }

@@ -189,12 +189,15 @@ class TasklyUser {
     required this.password,
     required this.initials,
     required this.location,
-    required this.rating,
-    required this.tasksCount,
-    required this.savedCount,
+    this.phone,
+    this.rating = 0.0,
+    this.tasksCount = 0,
+    this.savedCount = 0,
     this.isVerified = false,
     this.profilePictureUrl,
     this.idNumber,
+    this.savedAddresses = const [],
+    this.paymentMethods = const [],
   });
 
   final String name;
@@ -202,12 +205,15 @@ class TasklyUser {
   final String password;
   final String initials;
   final String location;
+  final String? phone;
   final double rating;
   final int tasksCount;
   final int savedCount;
   final bool isVerified;
   final String? profilePictureUrl;
   final String? idNumber;
+  final List<String> savedAddresses;
+  final List<String> paymentMethods;
 
   TasklyUser copyWith({
     String? name,
@@ -215,12 +221,15 @@ class TasklyUser {
     String? password,
     String? initials,
     String? location,
+    String? phone,
     double? rating,
     int? tasksCount,
     int? savedCount,
     bool? isVerified,
     String? profilePictureUrl,
     String? idNumber,
+    List<String>? savedAddresses,
+    List<String>? paymentMethods,
   }) {
     return TasklyUser(
       name: name ?? this.name,
@@ -228,12 +237,15 @@ class TasklyUser {
       password: password ?? this.password,
       initials: initials ?? this.initials,
       location: location ?? this.location,
+      phone: phone ?? this.phone,
       rating: rating ?? this.rating,
       tasksCount: tasksCount ?? this.tasksCount,
       savedCount: savedCount ?? this.savedCount,
       isVerified: isVerified ?? this.isVerified,
       profilePictureUrl: profilePictureUrl ?? this.profilePictureUrl,
       idNumber: idNumber ?? this.idNumber,
+      savedAddresses: savedAddresses ?? this.savedAddresses,
+      paymentMethods: paymentMethods ?? this.paymentMethods,
     );
   }
 }
