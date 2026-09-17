@@ -6,6 +6,7 @@ import 'package:shared_components/shared_components.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'auth_screen.dart';
+import 'api_service.dart';
 
 const String supabaseUrl = 'https://qnwjqdiwtxunjooiunsf.supabase.co';
 const String supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFud2pxZGl3dHh1bmpvb2l1bnNmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM1NjA1MjgsImV4cCI6MjA5OTEzNjUyOH0.JwquBu_bqARoddPSnraEytFDdV-9GwL5jgcYl5-4zZ4';
@@ -67,6 +68,15 @@ class _TasklyTaskerAppState extends State<TasklyTaskerApp> {
             reviews: 1,
             verified: true,
           );
+
+          try {
+            ApiService.googleSignIn(
+              email: email,
+              name: fullName,
+              photoUrl: user.userMetadata?['avatar_url'] as String?,
+              idToken: session.accessToken,
+            );
+          } catch (_) {}
 
           _handleLoginSuccess(tasker);
         }

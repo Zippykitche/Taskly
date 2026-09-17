@@ -453,9 +453,13 @@ class _UserAuthScreenState extends State<UserAuthScreen> {
     });
 
     try {
+      final redirectUrl = kIsWeb
+          ? '${Uri.base.origin}/'
+          : 'io.supabase.flutter://login-callback/';
+
       await Supabase.instance.client.auth.signInWithOAuth(
         OAuthProvider.google,
-        redirectTo: kIsWeb ? null : 'io.supabase.flutter://login-callback/',
+        redirectTo: redirectUrl,
       );
 
       final user = Supabase.instance.client.auth.currentUser;
