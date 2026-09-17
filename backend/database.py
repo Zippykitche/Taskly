@@ -8,8 +8,13 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-# Database URL from environment
-DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./taskly.db")
+DATABASE_URL = os.getenv("DATABASE_URL") or os.getenv("DIRECT_URL") or "sqlite:///./taskly.db"
+
+# Automatic fix for Render IPv6 incompatibility:
+if "db.qnwjqdiwtxunjooiunsf.supabase.co" in DATABASE_URL:
+    DATABASE_URL = DATABASE_URL.replace("db.qnwjqdiwtxunjooiunsf.supabase.co", "aws-1-ap-south-1.pooler.supabase.com")
+    if "postgres:" in DATABASE_URL and "postgres.qnwjqdiwtxunjooiunsf" not in DATABASE_URL:
+        DATABASE_URL = DATABASE_URL.replace("postgres:", "postgres.qnwjqdiwtxunjooiunsf:", 1)
 
 if DATABASE_URL.startswith("postgresql://"):
     DATABASE_URL = DATABASE_URL.replace("postgresql://", "postgresql+psycopg://", 1)
