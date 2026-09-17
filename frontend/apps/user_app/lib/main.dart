@@ -297,55 +297,6 @@ class _UserMainNavigationScreenState extends State<UserMainNavigationScreen> {
                   Row(
                     children: [
                       const TasklyLogo(size: 40),
-                      const SizedBox(width: 12),
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              Text(
-                                'TASKLY',
-                                style: TextStyle(
-                                  fontWeight: FontWeight.w900,
-                                  fontSize: 18,
-                                  letterSpacing: 1.2,
-                                  color: AppColors.primary,
-                                ),
-                              ),
-                              const SizedBox(width: 6),
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                decoration: BoxDecoration(
-                                  color: AppColors.primary.withValues(alpha: 0.15),
-                                  borderRadius: BorderRadius.circular(6),
-                                ),
-                                child: const Text(
-                                  'CLIENT',
-                                  style: TextStyle(
-                                    fontSize: 10,
-                                    fontWeight: FontWeight.w800,
-                                    color: Color(0xFF00B37E),
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                          Row(
-                            children: [
-                              Icon(Icons.location_on_rounded, size: 14, color: AppColors.textMuted),
-                              const SizedBox(width: 4),
-                              Text(
-                                _currentUser.location,
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w600,
-                                  color: AppColors.textSecondary,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
                       const Spacer(),
                       IconButton(
                         onPressed: () {
@@ -455,7 +406,7 @@ class _UserMainNavigationScreenState extends State<UserMainNavigationScreen> {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Text(
-                        'Popular Categories',
+                        'Popular Projects',
                         style: context.type.titleLarge?.copyWith(
                           fontWeight: FontWeight.w900,
                           letterSpacing: -0.3,
