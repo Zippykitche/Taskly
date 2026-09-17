@@ -162,6 +162,7 @@ async def rate_limit_middleware_config(request: Request, call_next):
 async def register(user_data: UserRegister, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
     try:
         # Validate input
+        user_data.email = (user_data.email or "").strip().lower()
         if not InputValidation.validate_email(user_data.email):
             raise HTTPException(status_code=400, detail="Invalid email format. Please enter a valid email address (e.g. name@example.com).")
         

@@ -176,6 +176,7 @@ async def register(user_data: UserRegister, background_tasks: BackgroundTasks, d
         A confirmation message with the new user's details.
     """
     try:
+        user_data.email = (user_data.email or "").strip().lower()
         if not InputValidation.validate_email(user_data.email):
             raise HTTPException(status_code=400, detail="Invalid email format. Please enter a valid email address (e.g. name@example.com).")
         if not InputValidation.validate_phone(user_data.phone_number):
