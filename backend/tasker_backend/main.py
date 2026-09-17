@@ -60,7 +60,7 @@ image_verifier = ImageVerification()
 email_service = EmailService()
 # mpesa_service = MpesaService()
 
-@app.get("/health")
+@app.api_route("/health", methods=["GET", "HEAD"])
 async def health_check(db: Session = Depends(get_db)):
     db_status = "connected"
     db_error = None
@@ -885,23 +885,13 @@ async def get_disputes(current_user: User = Depends(get_current_user), db: Sessi
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-# ========== HEALTH CHECK ==========
-@app.get("/")
-async def health(db: Session = Depends(get_db)):
-    try:
-        # Test database connection
-        db.execute(text("SELECT 1"))
-        return {
-            "status": "Tasker Backend Running on 8002",
-            "database": "PostgreSQL Connected",
-            "timestamp": datetime.utcnow().isoformat()
-        }
-    except:
-        return {
-            "status": "Tasker Backend Running on 8002",
-            "database": "PostgreSQL Error",
-            "timestamp": datetime.utcnow().isoformat()
-        }
+# ========== HEALTH & ROOT CHECK ==========
+@app.api_route("/", methods=["GET", "HEAD"])
+async def root():
+    return {
+        "message": "Taskly Tasker API is running",
+        "status": "ok"
+    }
 
 if __name__ == "__main__":
     import uvicorn

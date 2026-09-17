@@ -52,7 +52,7 @@ ALGORITHM = "HS256"
 email_service = EmailService()
 mpesa_service = MpesaService()
 
-@app.get("/health")
+@app.api_route("/health", methods=["GET", "HEAD"])
 async def health_check(db: Session = Depends(get_db)):
     db_status = "connected"
     db_error = None
@@ -665,28 +665,13 @@ async def get_job_stats(current_user: User = Depends(get_current_recruiter), db:
     
     return stats
 
-# ========== HEALTH CHECK ==========
-@app.get("/")
-async def health(db: Session = Depends(get_db)):
-    """
-    Health check endpoint to verify service and database status.
-
-    Args:
-        db: The database session.
-
-    Returns:
-        A status message indicating the health of the service.
-    """
-    try:
-        # Test database connection
-        db.execute(text("SELECT 1"))
-        return {
-            "status": "Recruiter Backend Running on 8003",
-            "database": "PostgreSQL Connected",
-            "timestamp": datetime.utcnow().isoformat()
-        }
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Database connection failed: {e}")
+# ========== HEALTH & ROOT CHECK ==========
+@app.api_route("/", methods=["GET", "HEAD"])
+async def root():
+    return {
+        "message": "Taskly Recruiter API is running",
+        "status": "ok"
+    }
 
 if __name__ == "__main__":
     import uvicorn
