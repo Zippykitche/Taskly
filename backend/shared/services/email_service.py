@@ -4,6 +4,9 @@ import logging
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 import httpx
+from dotenv import load_dotenv
+
+load_dotenv()
 
 logger = logging.getLogger("taskly.email_service")
 
@@ -58,14 +61,14 @@ class EmailService:
                     )
                     if resp.status_code in (200, 201):
                         logger.info(f"Email sent via Resend to {to_email}: {subject}")
-                        print(f"📧 [Resend] Email sent to {to_email}: {subject}")
+                        print(f"[Resend] Email sent to {to_email}: {subject}")
                         return True
                     else:
                         logger.error(f"Resend API error ({resp.status_code}): {resp.text}")
-                        print(f"⚠️ [Resend Error]: {resp.text}")
+                        print(f"[Resend Error]: {resp.text}")
             except Exception as e:
                 logger.error(f"Failed to send email via Resend: {e}")
-                print(f"⚠️ [Resend Exception]: {e}")
+                print(f"[Resend Exception]: {e}")
 
         # Provider 2: SendGrid API (via HTTP)
         if self.sendgrid_api_key:
@@ -86,14 +89,14 @@ class EmailService:
                     )
                     if resp.status_code in (200, 202):
                         logger.info(f"Email sent via SendGrid to {to_email}: {subject}")
-                        print(f"📧 [SendGrid] Email sent to {to_email}: {subject}")
+                        print(f"[SendGrid] Email sent to {to_email}: {subject}")
                         return True
                     else:
                         logger.error(f"SendGrid API error ({resp.status_code}): {resp.text}")
-                        print(f"⚠️ [SendGrid Error]: {resp.text}")
+                        print(f"[SendGrid Error]: {resp.text}")
             except Exception as e:
                 logger.error(f"Failed to send email via SendGrid: {e}")
-                print(f"⚠️ [SendGrid Exception]: {e}")
+                print(f"[SendGrid Exception]: {e}")
 
         # Provider 3: Standard SMTP (Gmail, Brevo, custom SMTP)
         if self.smtp_user and self.smtp_password:
@@ -112,17 +115,17 @@ class EmailService:
                 server.sendmail(self.from_email, to_email, msg.as_string())
                 server.quit()
                 logger.info(f"Email sent via SMTP to {to_email}: {subject}")
-                print(f"📧 [SMTP] Email sent to {to_email}: {subject}")
+                print(f"[SMTP] Email sent to {to_email}: {subject}")
                 return True
             except Exception as e:
                 logger.error(f"Failed to send email via SMTP: {e}")
-                print(f"⚠️ [SMTP Error]: {e}")
+                print(f"[SMTP Error]: {e}")
 
         logger.warning(
             f"No email credentials configured. Email to {to_email} was skipped. "
             "Please configure SMTP_USER/SMTP_PASSWORD or RESEND_API_KEY."
         )
-        print(f"ℹ️ [Email Skipped] No credentials configured to send email to {to_email}.")
+        print(f"[Email Skipped] No credentials configured to send email to {to_email}.")
         return False
 
     def send_registration_email(self, to_email: str, full_name: str, user_type: str) -> bool:
