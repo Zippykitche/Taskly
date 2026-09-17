@@ -282,16 +282,20 @@ class TasklyAvatar extends StatelessWidget {
   const TasklyAvatar({
     super.key,
     required this.initials,
+    this.imageUrl,
     this.size = 56,
     this.verified = false,
   });
 
   final String initials;
+  final String? imageUrl;
   final double size;
   final bool verified;
 
   @override
   Widget build(BuildContext context) {
+    final hasImage = imageUrl != null && imageUrl!.trim().isNotEmpty;
+
     return Stack(
       clipBehavior: Clip.none,
       children: [
@@ -308,16 +312,36 @@ class TasklyAvatar extends StatelessWidget {
             boxShadow: AppShadows.glow,
             border: Border.all(color: AppColors.border, width: 1.5),
           ),
-          child: Center(
-            child: Text(
-              initials,
-              style: TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.w900,
-                fontSize: size * .32,
-                letterSpacing: -0.5,
-              ),
-            ),
+          child: ClipOval(
+            child: hasImage
+                ? Image.network(
+                    imageUrl!,
+                    width: size,
+                    height: size,
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, __, ___) => Center(
+                      child: Text(
+                        initials,
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w900,
+                          fontSize: size * .32,
+                          letterSpacing: -0.5,
+                        ),
+                      ),
+                    ),
+                  )
+                : Center(
+                    child: Text(
+                      initials,
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w900,
+                        fontSize: size * .32,
+                        letterSpacing: -0.5,
+                      ),
+                    ),
+                  ),
           ),
         ),
         if (verified)
@@ -325,7 +349,7 @@ class TasklyAvatar extends StatelessWidget {
             right: -3,
             bottom: -3,
             child: Container(
-              padding: EdgeInsets.all(3),
+              padding: const EdgeInsets.all(3),
               decoration: BoxDecoration(
                 color: AppColors.background,
                 shape: BoxShape.circle,

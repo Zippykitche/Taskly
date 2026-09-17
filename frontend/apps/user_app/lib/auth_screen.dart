@@ -323,9 +323,10 @@ class _UserAuthScreenState extends State<UserAuthScreen> {
           password: password,
           initials: _getInitials(name),
           location: '$_selectedLocation, $_selectedCounty',
-          rating: 5.0,
-          tasksCount: 1,
+          rating: 0.0,
+          tasksCount: 0,
           savedCount: 0,
+          isVerified: false,
         );
 
         widget.onAuthenticated(user);
@@ -476,9 +477,10 @@ class _UserAuthScreenState extends State<UserAuthScreen> {
           password: '',
           initials: initials,
           location: 'Nairobi, Kenya',
-          rating: 5.0,
+          rating: 0.0,
           tasksCount: 0,
           savedCount: 0,
+          isVerified: false,
         );
 
         // Sync with backend PostgreSQL database as recruiter

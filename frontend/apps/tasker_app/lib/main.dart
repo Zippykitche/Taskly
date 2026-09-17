@@ -61,12 +61,12 @@ class _TasklyTaskerAppState extends State<TasklyTaskerApp> {
             name: fullName,
             avatar: avatar.isNotEmpty ? avatar : 'PT',
             skill: 'General Specialist',
-            rating: 5.0,
-            distance: '1.0 mi',
-            matchScore: 98,
-            completionRate: 100,
-            reviews: 1,
-            verified: true,
+            rating: 0.0,
+            distance: '0 km',
+            matchScore: 0,
+            completionRate: 0,
+            reviews: 0,
+            verified: false,
           );
 
           try {
@@ -74,7 +74,7 @@ class _TasklyTaskerAppState extends State<TasklyTaskerApp> {
               email: email,
               name: fullName,
               photoUrl: user.userMetadata?['avatar_url'] as String?,
-              idToken: session.accessToken,
+              idToken: session?.accessToken,
             );
           } catch (_) {}
 
@@ -89,11 +89,14 @@ class _TasklyTaskerAppState extends State<TasklyTaskerApp> {
       final prefs = await SharedPreferences.getInstance();
       final isLoggedIn = prefs.getBool('tasker_is_logged_in') ?? false;
       if (isLoggedIn) {
-        final name = prefs.getString('tasker_name') ?? 'Maya Johnson';
-        final skill = prefs.getString('tasker_skill') ?? 'Deep cleaning specialist';
-        final avatar = prefs.getString('tasker_avatar') ?? 'MJ';
-        final rating = prefs.getDouble('tasker_rating') ?? 4.98;
-        final reviews = prefs.getInt('tasker_reviews') ?? 324;
+        final name = prefs.getString('tasker_name') ?? 'Pro Tasker';
+        final skill = prefs.getString('tasker_skill') ?? 'General Specialist';
+        final avatar = prefs.getString('tasker_avatar') ?? 'PT';
+        final rating = prefs.getDouble('tasker_rating') ?? 0.0;
+        final reviews = prefs.getInt('tasker_reviews') ?? 0;
+        final verified = prefs.getBool('tasker_verified') ?? false;
+        final idNumber = prefs.getString('tasker_id_number');
+        final photoUrl = prefs.getString('tasker_profile_photo');
 
         setState(() {
           _authenticatedTasker = TaskerProfile(
@@ -101,11 +104,13 @@ class _TasklyTaskerAppState extends State<TasklyTaskerApp> {
             avatar: avatar,
             skill: skill,
             rating: rating,
-            distance: '1.2 mi',
-            matchScore: 98,
-            completionRate: 99,
+            distance: '0 km',
+            matchScore: 0,
+            completionRate: 0,
             reviews: reviews,
-            verified: true,
+            verified: verified,
+            idNumber: idNumber,
+            profilePictureUrl: photoUrl,
           );
         });
       }
@@ -129,6 +134,9 @@ class _TasklyTaskerAppState extends State<TasklyTaskerApp> {
       await prefs.setString('tasker_avatar', tasker.avatar);
       await prefs.setDouble('tasker_rating', tasker.rating);
       await prefs.setInt('tasker_reviews', tasker.reviews);
+      await prefs.setBool('tasker_verified', tasker.verified);
+      if (tasker.idNumber != null) await prefs.setString('tasker_id_number', tasker.idNumber!);
+      if (tasker.profilePictureUrl != null) await prefs.setString('tasker_profile_photo', tasker.profilePictureUrl!);
     } catch (_) {}
   }
 
@@ -206,28 +214,7 @@ class _TaskerMainNavigationScreenState extends State<TaskerMainNavigationScreen>
     super.initState();
     _currentTasker = widget.currentTasker;
     _jobsFeed = List<AvailableJob>.from(availableJobs);
-    _activeJobs = [
-      {
-        'title': 'Deep clean 3-bedroom apartment',
-        'customer': 'Zipporah Wambui',
-        'address': 'Westlands Heights, Apt 4B, Nairobi',
-        'budget': r'$150',
-        'time': 'Today, 2:00 PM - 5:30 PM',
-        'stage': 'En Route', // Stages: Accepted -> En Route -> Arrived -> In Progress -> Completed
-        'notes': 'Client mentioned focus on windows and kitchen tiles.',
-        'customerPhone': '+254 712 345 678',
-      },
-      {
-        'title': 'Weekly meal prep for family of 4',
-        'customer': 'Olivia Rodriguez',
-        'address': 'Riverside Drive, Villa 12, Nairobi',
-        'budget': r'$120',
-        'time': 'Tomorrow, 10:00 AM',
-        'stage': 'Accepted',
-        'notes': 'Low sodium ingredients, organic produce provided.',
-        'customerPhone': '+254 722 987 654',
-      },
-    ];
+    _activeJobs = [];
   }
 
   @override
@@ -922,7 +909,7 @@ class _TaskerMainNavigationScreenState extends State<TaskerMainNavigationScreen>
                           borderRadius: BorderRadius.circular(6),
                         ),
                         child: Text(
-                          '+18.4% vs last week',
+                          'Clean Slate • KES 0.00',
                           style: TextStyle(
                             color: AppColors.primary,
                             fontWeight: FontWeight.w800,
@@ -934,7 +921,7 @@ class _TaskerMainNavigationScreenState extends State<TaskerMainNavigationScreen>
                   ),
                   const SizedBox(height: 10),
                   Text(
-                    r'$1,290.00',
+                    r'$0.00',
                     style: TextStyle(
                       fontSize: 36,
                       fontWeight: FontWeight.w900,
@@ -956,26 +943,12 @@ class _TaskerMainNavigationScreenState extends State<TaskerMainNavigationScreen>
                               builder: (context) => AlertDialog(
                                 title: const Text('Instant Payout'),
                                 content: const Text(
-                                  'Transfer \$1,290.00 to your linked M-Pesa / Bank account instantly?',
+                                  'Current balance is \$0.00. Accept and complete customer jobs to earn payouts directly to M-Pesa or Bank.',
                                 ),
                                 actions: [
                                   TextButton(
                                     onPressed: () => Navigator.pop(context),
-                                    child: const Text('Cancel'),
-                                  ),
-                                  ElevatedButton(
-                                    onPressed: () {
-                                      Navigator.pop(context);
-                                      ScaffoldMessenger.of(context).showSnackBar(
-                                        SnackBar(
-                                          content: const Text(
-                                            'Payout of \$1,290.00 transferred successfully!',
-                                          ),
-                                          backgroundColor: AppColors.primary,
-                                        ),
-                                      );
-                                    },
-                                    child: const Text('Confirm Payout'),
+                                    child: const Text('Close'),
                                   ),
                                 ],
                               ),
@@ -1019,7 +992,7 @@ class _TaskerMainNavigationScreenState extends State<TaskerMainNavigationScreen>
                             const SizedBox(height: 6),
                             Container(
                               width: 24,
-                              height: (point.amount / 310) * 110,
+                              height: point.amount > 0 ? (point.amount / 310) * 110 : 6.0,
                               decoration: BoxDecoration(
                                 gradient: point.amount > 200
                                     ? AppColors.primaryGradient
@@ -1120,22 +1093,7 @@ class _TaskerMainNavigationScreenState extends State<TaskerMainNavigationScreen>
   }
 
   Widget _buildClientChatsScreen() {
-    final clients = [
-      {
-        'name': 'Zipporah Wambui',
-        'avatar': 'ZW',
-        'task': 'Deep clean 3-bedroom apartment',
-        'lastMsg': 'Please let me know once you arrive at the security gate.',
-        'time': '5m ago',
-      },
-      {
-        'name': 'Olivia Rodriguez',
-        'avatar': 'OR',
-        'task': 'Weekly meal prep for family of 4',
-        'lastMsg': 'Thanks Maya! See you tomorrow morning.',
-        'time': '2h ago',
-      },
-    ];
+    final List<Map<String, String>> clients = [];
 
     return SafeArea(
       child: Padding(
@@ -1158,77 +1116,83 @@ class _TaskerMainNavigationScreenState extends State<TaskerMainNavigationScreen>
             const SizedBox(height: 20),
 
             Expanded(
-              child: ListView.separated(
-                itemCount: clients.length,
-                separatorBuilder: (_, __) => const SizedBox(height: 12),
-                itemBuilder: (context, index) {
-                  final client = clients[index];
-                  return InkWell(
-                    onTap: () => _openTaskerChatModal(
-                      client['name']!,
-                      client['avatar']!,
-                      client['task']!,
-                    ),
-                    borderRadius: AppRadius.lgBorder,
-                    child: Container(
-                      padding: const EdgeInsets.all(16),
-                      decoration: AppCards.surface(radius: AppRadius.lg),
-                      child: Row(
-                        children: [
-                          TasklyAvatar(initials: client['avatar']!, size: 50, verified: false),
-                          const SizedBox(width: 14),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
+              child: clients.isEmpty
+                  ? const EmptyState(
+                      icon: Icons.chat_bubble_outline_rounded,
+                      title: 'No Client Messages Yet',
+                      message: 'When clients book your services, direct conversations will appear here.',
+                    )
+                  : ListView.separated(
+                      itemCount: clients.length,
+                      separatorBuilder: (_, __) => const SizedBox(height: 12),
+                      itemBuilder: (context, index) {
+                        final client = clients[index];
+                        return InkWell(
+                          onTap: () => _openTaskerChatModal(
+                            client['name']!,
+                            client['avatar']!,
+                            client['task']!,
+                          ),
+                          borderRadius: AppRadius.lgBorder,
+                          child: Container(
+                            padding: const EdgeInsets.all(16),
+                            decoration: AppCards.surface(radius: AppRadius.lg),
+                            child: Row(
                               children: [
-                                Row(
-                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                  children: [
-                                    Text(
-                                      client['name']!,
-                                      style: const TextStyle(
-                                        fontWeight: FontWeight.w800,
-                                        fontSize: 15,
+                                TasklyAvatar(initials: client['avatar']!, size: 50, verified: false),
+                                const SizedBox(width: 14),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Row(
+                                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                        children: [
+                                          Text(
+                                            client['name']!,
+                                            style: const TextStyle(
+                                              fontWeight: FontWeight.w800,
+                                              fontSize: 15,
+                                            ),
+                                          ),
+                                          Text(
+                                            client['time']!,
+                                            style: TextStyle(
+                                              color: AppColors.textMuted,
+                                              fontSize: 11,
+                                              fontWeight: FontWeight.w600,
+                                            ),
+                                          ),
+                                        ],
                                       ),
-                                    ),
-                                    Text(
-                                      client['time']!,
-                                      style: TextStyle(
-                                        color: AppColors.textMuted,
-                                        fontSize: 11,
-                                        fontWeight: FontWeight.w600,
+                                      const SizedBox(height: 2),
+                                      Text(
+                                        client['task']!,
+                                        style: TextStyle(
+                                          color: AppColors.primary,
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w700,
+                                        ),
                                       ),
-                                    ),
-                                  ],
-                                ),
-                                const SizedBox(height: 2),
-                                Text(
-                                  client['task']!,
-                                  style: TextStyle(
-                                    color: AppColors.primary,
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w700,
-                                  ),
-                                ),
-                                const SizedBox(height: 4),
-                                Text(
-                                  client['lastMsg']!,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: TextStyle(
-                                    color: AppColors.textSecondary,
-                                    fontSize: 13,
+                                      const SizedBox(height: 4),
+                                      Text(
+                                        client['lastMsg']!,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: TextStyle(
+                                          color: AppColors.textSecondary,
+                                          fontSize: 13,
+                                        ),
+                                      ),
+                                    ],
                                   ),
                                 ),
                               ],
                             ),
                           ),
-                        ],
-                      ),
+                        );
+                      },
                     ),
-                  );
-                },
-              ),
             ),
           ],
         ),
@@ -1258,7 +1222,12 @@ class _TaskerMainNavigationScreenState extends State<TaskerMainNavigationScreen>
               decoration: AppCards.surface(radius: AppRadius.lg),
               child: Row(
                 children: [
-                  TasklyAvatar(initials: _currentTasker.avatar, size: 64, verified: _currentTasker.verified),
+                  TasklyAvatar(
+                    initials: _currentTasker.avatar,
+                    imageUrl: _currentTasker.profilePictureUrl,
+                    size: 64,
+                    verified: _currentTasker.verified,
+                  ),
                   const SizedBox(width: 16),
                   Expanded(
                     child: Column(
@@ -1266,12 +1235,31 @@ class _TaskerMainNavigationScreenState extends State<TaskerMainNavigationScreen>
                       children: [
                         Row(
                           children: [
-                            Text(
-                              _currentTasker.name,
-                              style: context.type.titleLarge?.copyWith(fontWeight: FontWeight.w900),
+                            Flexible(
+                              child: Text(
+                                _currentTasker.name,
+                                style: context.type.titleLarge?.copyWith(fontWeight: FontWeight.w900),
+                              ),
                             ),
                             const SizedBox(width: 6),
-                            const Icon(Icons.verified_rounded, color: Color(0xFF00B37E), size: 18),
+                            if (_currentTasker.verified)
+                              const Icon(Icons.verified_rounded, color: Color(0xFF00B37E), size: 18)
+                            else
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: Colors.orange.withValues(alpha: 0.15),
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                                child: const Text(
+                                  'Unverified',
+                                  style: TextStyle(
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.w800,
+                                    color: Colors.orange,
+                                  ),
+                                ),
+                              ),
                           ],
                         ),
                         Text(
@@ -1299,7 +1287,98 @@ class _TaskerMainNavigationScreenState extends State<TaskerMainNavigationScreen>
                 ],
               ),
             ),
-            const SizedBox(height: 24),
+            const SizedBox(height: 16),
+
+            // Pro Identity Verification Card
+            if (!_currentTasker.verified)
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.amber.withValues(alpha: 0.08),
+                  borderRadius: AppRadius.lgBorder,
+                  border: Border.all(color: Colors.amber.withValues(alpha: 0.35)),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: Colors.amber.withValues(alpha: 0.18),
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(Icons.shield_outlined, color: Colors.amber, size: 20),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text(
+                                'Pro Identity Verification Required',
+                                style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                'Upload your profile photo and confirm your National ID details to earn the verified badge.',
+                                style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 14),
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton.icon(
+                        onPressed: _showTaskerVerificationModal,
+                        icon: const Icon(Icons.verified_user_rounded, size: 16),
+                        label: const Text('Complete Pro Verification', style: TextStyle(fontWeight: FontWeight.w700)),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppColors.primary,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.md)),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              )
+            else
+              Container(
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF00B37E).withValues(alpha: 0.08),
+                  borderRadius: AppRadius.lgBorder,
+                  border: Border.all(color: const Color(0xFF00B37E).withValues(alpha: 0.3)),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.verified_rounded, color: Color(0xFF00B37E), size: 22),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'Taskly Pro Verified Tasker',
+                            style: TextStyle(fontWeight: FontWeight.w800, fontSize: 13, color: Color(0xFF00B37E)),
+                          ),
+                          Text(
+                            'National ID: ${_currentTasker.idNumber ?? "Verified"} • Verified badge active on client feed',
+                            style: TextStyle(color: AppColors.textSecondary, fontSize: 11),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            const SizedBox(height: 20),
 
             // Settings Options
             Container(
@@ -1428,6 +1507,282 @@ class _TaskerMainNavigationScreenState extends State<TaskerMainNavigationScreen>
         clientName: clientName,
         initials: initials,
         taskTitle: taskTitle,
+      ),
+    );
+  }
+
+  void _showTaskerVerificationModal() {
+    final nameController = TextEditingController(text: _currentTasker.name);
+    final idController = TextEditingController(text: _currentTasker.idNumber ?? '');
+    final skillController = TextEditingController(text: _currentTasker.skill);
+    String selectedPhoto = _currentTasker.profilePictureUrl ??
+        'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=256&q=80';
+    bool confirmedDeclaration = false;
+
+    final avatarPresets = [
+      'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=256&q=80',
+      'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=256&q=80',
+      'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=256&q=80',
+      'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&w=256&q=80',
+    ];
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setModalState) {
+          return Container(
+            height: MediaQuery.of(context).size.height * 0.88,
+            decoration: BoxDecoration(
+              color: AppColors.surface,
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(AppRadius.xl)),
+            ),
+            padding: EdgeInsets.fromLTRB(20, 16, 20, MediaQuery.of(context).viewInsets.bottom + 20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(
+                  child: Container(
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: AppColors.border,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Pro Verification',
+                          style: context.type.titleLarge?.copyWith(fontWeight: FontWeight.w900),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          'Upload photo & verify National ID credentials',
+                          style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
+                        ),
+                      ],
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.close_rounded),
+                      onPressed: () => Navigator.pop(context),
+                    ),
+                  ],
+                ),
+                const Divider(height: 24),
+                Expanded(
+                  child: ListView(
+                    children: [
+                      // Photo Upload Section
+                      Text(
+                        '1. PRO PROFILE PHOTO',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w800,
+                          fontSize: 12,
+                          letterSpacing: 0.5,
+                          color: AppColors.primary,
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      Row(
+                        children: [
+                          TasklyAvatar(
+                            initials: _currentTasker.avatar,
+                            imageUrl: selectedPhoto,
+                            size: 68,
+                            verified: false,
+                          ),
+                          const SizedBox(width: 16),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text(
+                                  'Choose Profile Photo',
+                                  style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  'A clear face photo helps clients recognize and trust you on bookings.',
+                                  style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: avatarPresets.map((preset) {
+                          final isSelected = selectedPhoto == preset;
+                          return GestureDetector(
+                            onTap: () => setModalState(() => selectedPhoto = preset),
+                            child: Container(
+                              padding: const EdgeInsets.all(2),
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                border: Border.all(
+                                  color: isSelected ? AppColors.primary : Colors.transparent,
+                                  width: 2.5,
+                                ),
+                              ),
+                              child: CircleAvatar(
+                                radius: 24,
+                                backgroundImage: NetworkImage(preset),
+                              ),
+                            ),
+                          );
+                        }).toList(),
+                      ),
+                      const SizedBox(height: 20),
+
+                      // Personal & Professional Details
+                      Text(
+                        '2. PERSONAL & CREDENTIAL DETAILS',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w800,
+                          fontSize: 12,
+                          letterSpacing: 0.5,
+                          color: AppColors.primary,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      TextField(
+                        controller: nameController,
+                        decoration: const InputDecoration(
+                          labelText: 'Full Legal Name',
+                          hintText: 'e.g. Maya Johnson',
+                          prefixIcon: Icon(Icons.person_outline_rounded),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      TextField(
+                        controller: idController,
+                        keyboardType: TextInputType.text,
+                        decoration: const InputDecoration(
+                          labelText: 'Kenyan National ID / Passport Number',
+                          hintText: 'e.g. 12345678 or A1234567',
+                          prefixIcon: Icon(Icons.badge_outlined),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      TextField(
+                        controller: skillController,
+                        decoration: const InputDecoration(
+                          labelText: 'Primary Trade or Skill',
+                          hintText: 'e.g. Deep Cleaning & Sanitization',
+                          prefixIcon: Icon(Icons.handyman_outlined),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+
+                      // Agreement checkbox
+                      CheckboxListTile(
+                        value: confirmedDeclaration,
+                        onChanged: (val) => setModalState(() => confirmedDeclaration = val ?? false),
+                        contentPadding: EdgeInsets.zero,
+                        controlAffinity: ListTileControlAffinity.leading,
+                        title: Text(
+                          'I declare that my National ID and professional skill information are accurate, authentic, and free of criminal records.',
+                          style: TextStyle(fontSize: 12, color: AppColors.textSecondary, fontWeight: FontWeight.w500),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 12),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: () async {
+                      final name = nameController.text.trim();
+                      final id = idController.text.trim();
+                      final skill = skillController.text.trim();
+
+                      if (name.isEmpty) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Please enter your full legal name.')),
+                        );
+                        return;
+                      }
+                      if (id.length < 5) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Please enter a valid National ID or Passport number.')),
+                        );
+                        return;
+                      }
+                      if (!confirmedDeclaration) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Please accept the background declaration to proceed.')),
+                        );
+                        return;
+                      }
+
+                      // Update local state
+                      final updatedTasker = _currentTasker.copyWith(
+                        name: name,
+                        idNumber: id,
+                        profilePictureUrl: selectedPhoto,
+                        skill: skill.isNotEmpty ? skill : _currentTasker.skill,
+                        verified: true,
+                      );
+
+                      setState(() {
+                        _currentTasker = updatedTasker;
+                      });
+
+                      // Persist to SharedPreferences
+                      try {
+                        final prefs = await SharedPreferences.getInstance();
+                        await prefs.setBool('tasker_verified', true);
+                        await prefs.setString('tasker_id_number', id);
+                        await prefs.setString('tasker_profile_photo', selectedPhoto);
+                        await prefs.setString('tasker_name', name);
+                        if (skill.isNotEmpty) await prefs.setString('tasker_skill', skill);
+                      } catch (_) {}
+
+                      if (!ctx.mounted) return;
+                      Navigator.pop(ctx);
+                      ScaffoldMessenger.of(ctx).showSnackBar(
+                        const SnackBar(
+                          content: Row(
+                            children: [
+                              Icon(Icons.verified_rounded, color: Colors.white),
+                              SizedBox(width: 12),
+                              Expanded(
+                                child: Text('Pro Identity verified successfully! Verified badge activated.'),
+                              ),
+                            ],
+                          ),
+                          backgroundColor: Color(0xFF00B37E),
+                          behavior: SnackBarBehavior.floating,
+                        ),
+                      );
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.primary,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.md)),
+                    ),
+                    child: const Text(
+                      'Confirm & Activate Pro Verification',
+                      style: TextStyle(fontWeight: FontWeight.w800, fontSize: 15),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          );
+        },
       ),
     );
   }

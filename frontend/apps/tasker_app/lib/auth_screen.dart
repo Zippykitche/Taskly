@@ -332,12 +332,12 @@ class _TaskerAuthScreenState extends State<TaskerAuthScreen> {
           name: defaultName,
           avatar: _getInitials(defaultName),
           skill: '$_selectedCategory Specialist',
-          rating: 5.0,
-          distance: '1.0 mi',
-          matchScore: 95,
-          completionRate: 100,
-          reviews: 1,
-          verified: true,
+          rating: 0.0,
+          distance: '0 km',
+          matchScore: 0,
+          completionRate: 0,
+          reviews: 0,
+          verified: false,
         );
 
         widget.onAuthenticated(profile);
@@ -490,12 +490,12 @@ class _TaskerAuthScreenState extends State<TaskerAuthScreen> {
           name: fullName,
           avatar: avatar,
           skill: '$_selectedCategory Specialist',
-          rating: 5.0,
-          distance: '0.9 mi',
-          matchScore: 98,
-          completionRate: 100,
-          reviews: 1,
-          verified: true,
+          rating: 0.0,
+          distance: '0 km',
+          matchScore: 0,
+          completionRate: 0,
+          reviews: 0,
+          verified: false,
         );
 
         // Sync with backend PostgreSQL database as tasker

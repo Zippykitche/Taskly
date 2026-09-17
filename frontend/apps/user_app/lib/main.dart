@@ -64,9 +64,10 @@ class _TasklyUserAppState extends State<TasklyUserApp> {
             password: '',
             initials: initials.isNotEmpty ? initials : 'U',
             location: 'Nairobi, Kenya',
-            rating: 5.0,
+            rating: 0.0,
             tasksCount: 0,
             savedCount: 0,
+            isVerified: false,
           );
 
           try {
@@ -74,7 +75,7 @@ class _TasklyUserAppState extends State<TasklyUserApp> {
               email: email,
               name: fullName,
               photoUrl: user.userMetadata?['avatar_url'] as String?,
-              idToken: session.accessToken,
+              idToken: session?.accessToken,
             );
           } catch (_) {}
 
@@ -89,12 +90,15 @@ class _TasklyUserAppState extends State<TasklyUserApp> {
       final prefs = await SharedPreferences.getInstance();
       final isLoggedIn = prefs.getBool('user_is_logged_in') ?? false;
       if (isLoggedIn) {
-        final name = prefs.getString('user_name') ?? 'Zipporah Wambui';
-        final email = prefs.getString('user_email') ?? 'zipporah@taskly.com';
+        final name = prefs.getString('user_name') ?? 'Client';
+        final email = prefs.getString('user_email') ?? '';
         final location = prefs.getString('user_location') ?? 'Nairobi, Kenya';
-        final initials = prefs.getString('user_initials') ?? 'ZW';
-        final rating = prefs.getDouble('user_rating') ?? 4.96;
-        final tasksCount = prefs.getInt('user_tasks_count') ?? 32;
+        final initials = prefs.getString('user_initials') ?? (name.isNotEmpty ? name[0].toUpperCase() : 'U');
+        final rating = prefs.getDouble('user_rating') ?? 0.0;
+        final tasksCount = prefs.getInt('user_tasks_count') ?? 0;
+        final isVerified = prefs.getBool('user_is_verified') ?? false;
+        final idNumber = prefs.getString('user_id_number');
+        final photoUrl = prefs.getString('user_profile_photo');
 
         setState(() {
           _authenticatedUser = TasklyUser(
@@ -105,7 +109,10 @@ class _TasklyUserAppState extends State<TasklyUserApp> {
             location: location,
             rating: rating,
             tasksCount: tasksCount,
-            savedCount: 8,
+            savedCount: 0,
+            isVerified: isVerified,
+            idNumber: idNumber,
+            profilePictureUrl: photoUrl,
           );
         });
       }
@@ -130,6 +137,9 @@ class _TasklyUserAppState extends State<TasklyUserApp> {
       await prefs.setString('user_initials', user.initials);
       await prefs.setDouble('user_rating', user.rating);
       await prefs.setInt('user_tasks_count', user.tasksCount);
+      await prefs.setBool('user_is_verified', user.isVerified);
+      if (user.idNumber != null) await prefs.setString('user_id_number', user.idNumber!);
+      if (user.profilePictureUrl != null) await prefs.setString('user_profile_photo', user.profilePictureUrl!);
     } catch (_) {}
   }
 
@@ -309,7 +319,12 @@ class _UserMainNavigationScreenState extends State<UserMainNavigationScreen> {
                         ),
                       ),
                       const SizedBox(width: 4),
-                      TasklyAvatar(initials: _currentUser.initials, size: 38, verified: true),
+                      TasklyAvatar(
+                        initials: _currentUser.initials,
+                        imageUrl: _currentUser.profilePictureUrl,
+                        size: 38,
+                        verified: _currentUser.isVerified,
+                      ),
                     ],
                   ),
                   const SizedBox(height: 20),
@@ -481,24 +496,58 @@ class _UserMainNavigationScreenState extends State<UserMainNavigationScreen> {
           ),
 
           // Taskers List
-          SliverPadding(
-            padding: const EdgeInsets.fromLTRB(20, 0, 20, 32),
-            sliver: SliverList(
-              delegate: SliverChildBuilderDelegate(
-                (context, index) {
-                  final tasker = filteredTaskers[index];
-                  return Padding(
-                    padding: const EdgeInsets.only(bottom: 16),
-                    child: TaskerCard(
-                      tasker: tasker,
-                      onTap: () => _showTaskerDetailModal(tasker),
-                    ),
-                  );
-                },
-                childCount: filteredTaskers.length,
+          if (filteredTaskers.isEmpty)
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(20, 0, 20, 32),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 36),
+                  decoration: AppCards.surface(radius: AppRadius.lg),
+                  child: Column(
+                    children: [
+                      Icon(Icons.person_search_rounded, size: 48, color: AppColors.textMuted),
+                      const SizedBox(height: 12),
+                      Text(
+                        'No Taskers Registered Yet',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w800,
+                          fontSize: 16,
+                          color: AppColors.textPrimary,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        'As service providers register and get verified on Taskly, their profiles will appear here.',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          color: AppColors.textSecondary,
+                          fontSize: 13,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            )
+          else
+            SliverPadding(
+              padding: const EdgeInsets.fromLTRB(20, 0, 20, 32),
+              sliver: SliverList(
+                delegate: SliverChildBuilderDelegate(
+                  (context, index) {
+                    final tasker = filteredTaskers[index];
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 16),
+                      child: TaskerCard(
+                        tasker: tasker,
+                        onTap: () => _showTaskerDetailModal(tasker),
+                      ),
+                    );
+                  },
+                  childCount: filteredTaskers.length,
+                ),
               ),
             ),
-          ),
         ],
       ),
     );
@@ -574,32 +623,7 @@ class _UserMainNavigationScreenState extends State<UserMainNavigationScreen> {
   }
 
   Widget _buildMessagesScreen() {
-    final mockChats = [
-      {
-        'name': 'Maya Johnson',
-        'avatar': 'MJ',
-        'task': 'Deep clean 3-bedroom apartment',
-        'lastMessage': 'I have arrived at the gate, please buzz me in.',
-        'time': '2m ago',
-        'unread': true,
-      },
-      {
-        'name': 'Daniel Kim',
-        'avatar': 'DK',
-        'task': 'Assemble standing desk',
-        'lastMessage': 'Bringing the electric screwdriver as requested!',
-        'time': '1h ago',
-        'unread': false,
-      },
-      {
-        'name': 'Chef Grace',
-        'avatar': 'CG',
-        'task': 'Private chef meal prep',
-        'lastMessage': 'The menu is ready. See you on Saturday!',
-        'time': 'Yesterday',
-        'unread': false,
-      },
-    ];
+    final List<Map<String, dynamic>> mockChats = [];
 
     return SafeArea(
       child: Padding(
@@ -625,80 +649,86 @@ class _UserMainNavigationScreenState extends State<UserMainNavigationScreen> {
             ),
             const SizedBox(height: 20),
             Expanded(
-              child: ListView.separated(
-                itemCount: mockChats.length,
-                separatorBuilder: (_, __) => const SizedBox(height: 12),
-                itemBuilder: (context, index) {
-                  final chat = mockChats[index];
-                  final isUnread = chat['unread'] as bool;
-                  return InkWell(
-                    onTap: () => _openChatModal(
-                      chat['name'] as String,
-                      chat['avatar'] as String,
-                      chat['task'] as String,
-                    ),
-                    borderRadius: AppRadius.lgBorder,
-                    child: Container(
-                      padding: const EdgeInsets.all(16),
-                      decoration: AppCards.surface(radius: AppRadius.lg),
-                      child: Row(
-                        children: [
-                          TasklyAvatar(initials: chat['avatar'] as String, size: 50, verified: true),
-                          const SizedBox(width: 14),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
+              child: mockChats.isEmpty
+                  ? const EmptyState(
+                      icon: Icons.chat_bubble_outline_rounded,
+                      title: 'No Messages Yet',
+                      message: 'Direct conversations with your booked service providers will appear here.',
+                    )
+                  : ListView.separated(
+                      itemCount: mockChats.length,
+                      separatorBuilder: (_, __) => const SizedBox(height: 12),
+                      itemBuilder: (context, index) {
+                        final chat = mockChats[index];
+                        final isUnread = chat['unread'] as bool;
+                        return InkWell(
+                          onTap: () => _openChatModal(
+                            chat['name'] as String,
+                            chat['avatar'] as String,
+                            chat['task'] as String,
+                          ),
+                          borderRadius: AppRadius.lgBorder,
+                          child: Container(
+                            padding: const EdgeInsets.all(16),
+                            decoration: AppCards.surface(radius: AppRadius.lg),
+                            child: Row(
                               children: [
-                                Row(
-                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                  children: [
-                                    Text(
-                                      chat['name'] as String,
-                                      style: TextStyle(
-                                        fontWeight: FontWeight.w800,
-                                        fontSize: 15,
-                                        color: AppColors.textPrimary,
+                                TasklyAvatar(initials: chat['avatar'] as String, size: 50, verified: false),
+                                const SizedBox(width: 14),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Row(
+                                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                        children: [
+                                          Text(
+                                            chat['name'] as String,
+                                            style: TextStyle(
+                                              fontWeight: FontWeight.w800,
+                                              fontSize: 15,
+                                              color: AppColors.textPrimary,
+                                            ),
+                                          ),
+                                          Text(
+                                            chat['time'] as String,
+                                            style: TextStyle(
+                                              fontSize: 11,
+                                              fontWeight: FontWeight.w600,
+                                              color: isUnread ? AppColors.primary : AppColors.textMuted,
+                                            ),
+                                          ),
+                                        ],
                                       ),
-                                    ),
-                                    Text(
-                                      chat['time'] as String,
-                                      style: TextStyle(
-                                        fontSize: 11,
-                                        fontWeight: FontWeight.w600,
-                                        color: isUnread ? AppColors.primary : AppColors.textMuted,
+                                      const SizedBox(height: 2),
+                                      Text(
+                                        chat['task'] as String,
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w600,
+                                          color: AppColors.primary,
+                                        ),
                                       ),
-                                    ),
-                                  ],
-                                ),
-                                const SizedBox(height: 2),
-                                Text(
-                                  chat['task'] as String,
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w600,
-                                    color: AppColors.primary,
-                                  ),
-                                ),
-                                const SizedBox(height: 4),
-                                Text(
-                                  chat['lastMessage'] as String,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: TextStyle(
-                                    fontSize: 13,
-                                    fontWeight: isUnread ? FontWeight.w700 : FontWeight.w500,
-                                    color: isUnread ? AppColors.textPrimary : AppColors.textSecondary,
+                                      const SizedBox(height: 4),
+                                      Text(
+                                        chat['lastMessage'] as String,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: TextStyle(
+                                          fontSize: 13,
+                                          fontWeight: isUnread ? FontWeight.w700 : FontWeight.w500,
+                                          color: isUnread ? AppColors.textPrimary : AppColors.textSecondary,
+                                        ),
+                                      ),
+                                    ],
                                   ),
                                 ),
                               ],
                             ),
                           ),
-                        ],
-                      ),
+                        );
+                      },
                     ),
-                  );
-                },
-              ),
             ),
           ],
         ),
@@ -728,18 +758,48 @@ class _UserMainNavigationScreenState extends State<UserMainNavigationScreen> {
               decoration: AppCards.surface(radius: AppRadius.lg),
               child: Row(
                 children: [
-                  TasklyAvatar(initials: _currentUser.initials, size: 64, verified: true),
+                  TasklyAvatar(
+                    initials: _currentUser.initials,
+                    imageUrl: _currentUser.profilePictureUrl,
+                    size: 64,
+                    verified: _currentUser.isVerified,
+                  ),
                   const SizedBox(width: 16),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
-                          _currentUser.name,
-                          style: context.type.titleLarge?.copyWith(
-                            fontWeight: FontWeight.w900,
-                            letterSpacing: -0.2,
-                          ),
+                        Row(
+                          children: [
+                            Flexible(
+                              child: Text(
+                                _currentUser.name,
+                                style: context.type.titleLarge?.copyWith(
+                                  fontWeight: FontWeight.w900,
+                                  letterSpacing: -0.2,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 6),
+                            if (_currentUser.isVerified)
+                              const Icon(Icons.verified_rounded, color: Color(0xFF00B37E), size: 18)
+                            else
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: Colors.orange.withValues(alpha: 0.15),
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                                child: const Text(
+                                  'Unverified',
+                                  style: TextStyle(
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.w800,
+                                    color: Colors.orange,
+                                  ),
+                                ),
+                              ),
+                          ],
                         ),
                         const SizedBox(height: 2),
                         Text(
@@ -771,7 +831,98 @@ class _UserMainNavigationScreenState extends State<UserMainNavigationScreen> {
                 ],
               ),
             ),
-            const SizedBox(height: 24),
+            const SizedBox(height: 16),
+
+            // Identity Verification Card
+            if (!_currentUser.isVerified)
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.amber.withValues(alpha: 0.08),
+                  borderRadius: AppRadius.lgBorder,
+                  border: Border.all(color: Colors.amber.withValues(alpha: 0.35)),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: Colors.amber.withValues(alpha: 0.18),
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(Icons.shield_outlined, color: Colors.amber, size: 20),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text(
+                                'Account Verification Required',
+                                style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                'Upload your profile photo and confirm your National ID details to get verified.',
+                                style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 14),
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton.icon(
+                        onPressed: _showVerificationModal,
+                        icon: const Icon(Icons.verified_user_rounded, size: 16),
+                        label: const Text('Complete Verification', style: TextStyle(fontWeight: FontWeight.w700)),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppColors.primary,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.md)),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              )
+            else
+              Container(
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF00B37E).withValues(alpha: 0.08),
+                  borderRadius: AppRadius.lgBorder,
+                  border: Border.all(color: const Color(0xFF00B37E).withValues(alpha: 0.3)),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.verified_rounded, color: Color(0xFF00B37E), size: 22),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'Identity Verified Account',
+                            style: TextStyle(fontWeight: FontWeight.w800, fontSize: 13, color: Color(0xFF00B37E)),
+                          ),
+                          Text(
+                            'National ID: ${_currentUser.idNumber ?? "Verified"} • Full verified client access',
+                            style: TextStyle(color: AppColors.textSecondary, fontSize: 11),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            const SizedBox(height: 20),
 
             // Account Options
             _buildProfileOption(
@@ -797,7 +948,7 @@ class _UserMainNavigationScreenState extends State<UserMainNavigationScreen> {
             _buildProfileOption(
               icon: Icons.payment_rounded,
               title: 'Payment Methods',
-              subtitle: 'Visa ending in 4242 & M-Pesa',
+              subtitle: 'Add M-Pesa or Card',
               onTap: () {},
             ),
             const SizedBox(height: 12),
@@ -1142,7 +1293,7 @@ class _UserMainNavigationScreenState extends State<UserMainNavigationScreen> {
               const SizedBox(height: 12),
               Row(
                 children: [
-                  TasklyAvatar(initials: task.tasker!.avatar, size: 44, verified: true),
+                  TasklyAvatar(initials: task.tasker!.avatar, size: 44, verified: task.tasker!.verified),
                   const SizedBox(width: 12),
                   Expanded(
                     child: Column(
@@ -1177,6 +1328,282 @@ class _UserMainNavigationScreenState extends State<UserMainNavigationScreen> {
             const SizedBox(height: 16),
           ],
         ),
+      ),
+    );
+  }
+
+  void _showVerificationModal() {
+    final nameController = TextEditingController(text: _currentUser.name);
+    final idController = TextEditingController(text: _currentUser.idNumber ?? '');
+    final locationController = TextEditingController(text: _currentUser.location);
+    String selectedPhoto = _currentUser.profilePictureUrl ??
+        'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=256&q=80';
+    bool confirmedDocs = false;
+
+    final avatarPresets = [
+      'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=256&q=80',
+      'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=256&q=80',
+      'https://images.unsplash.com/photo-1517841905240-472988babdf9?auto=format&fit=crop&w=256&q=80',
+      'https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?auto=format&fit=crop&w=256&q=80',
+    ];
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setModalState) {
+          return Container(
+            height: MediaQuery.of(context).size.height * 0.88,
+            decoration: BoxDecoration(
+              color: AppColors.surface,
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(AppRadius.xl)),
+            ),
+            padding: EdgeInsets.fromLTRB(20, 16, 20, MediaQuery.of(context).viewInsets.bottom + 20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(
+                  child: Container(
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: AppColors.border,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Identity Verification',
+                          style: context.type.titleLarge?.copyWith(fontWeight: FontWeight.w900),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          'Upload photo & confirm National ID details',
+                          style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
+                        ),
+                      ],
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.close_rounded),
+                      onPressed: () => Navigator.pop(context),
+                    ),
+                  ],
+                ),
+                const Divider(height: 24),
+                Expanded(
+                  child: ListView(
+                    children: [
+                      // Photo Upload Section
+                      Text(
+                        '1. PROFILE PHOTO',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w800,
+                          fontSize: 12,
+                          letterSpacing: 0.5,
+                          color: AppColors.primary,
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      Row(
+                        children: [
+                          TasklyAvatar(
+                            initials: _currentUser.initials,
+                            imageUrl: selectedPhoto,
+                            size: 68,
+                            verified: false,
+                          ),
+                          const SizedBox(width: 16),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text(
+                                  'Choose Profile Photo',
+                                  style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  'Select a preset avatar photo to verify your user profile.',
+                                  style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: avatarPresets.map((preset) {
+                          final isSelected = selectedPhoto == preset;
+                          return GestureDetector(
+                            onTap: () => setModalState(() => selectedPhoto = preset),
+                            child: Container(
+                              padding: const EdgeInsets.all(2),
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                border: Border.all(
+                                  color: isSelected ? AppColors.primary : Colors.transparent,
+                                  width: 2.5,
+                                ),
+                              ),
+                              child: CircleAvatar(
+                                radius: 24,
+                                backgroundImage: NetworkImage(preset),
+                              ),
+                            ),
+                          );
+                        }).toList(),
+                      ),
+                      const SizedBox(height: 20),
+
+                      // Personal Details
+                      Text(
+                        '2. PERSONAL & ID DETAILS',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w800,
+                          fontSize: 12,
+                          letterSpacing: 0.5,
+                          color: AppColors.primary,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      TextField(
+                        controller: nameController,
+                        decoration: const InputDecoration(
+                          labelText: 'Full Legal Name',
+                          hintText: 'e.g. Zipporah Wambui',
+                          prefixIcon: Icon(Icons.person_outline_rounded),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      TextField(
+                        controller: idController,
+                        keyboardType: TextInputType.text,
+                        decoration: const InputDecoration(
+                          labelText: 'Kenyan National ID / Passport Number',
+                          hintText: 'e.g. 12345678 or A1234567',
+                          prefixIcon: Icon(Icons.badge_outlined),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      TextField(
+                        controller: locationController,
+                        decoration: const InputDecoration(
+                          labelText: 'County & Location',
+                          hintText: 'e.g. Westlands, Nairobi',
+                          prefixIcon: Icon(Icons.location_on_outlined),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+
+                      // Agreement checkbox
+                      CheckboxListTile(
+                        value: confirmedDocs,
+                        onChanged: (val) => setModalState(() => confirmedDocs = val ?? false),
+                        contentPadding: EdgeInsets.zero,
+                        controlAffinity: ListTileControlAffinity.leading,
+                        title: Text(
+                          'I confirm that all provided details and identity credentials are authentic and belong to me.',
+                          style: TextStyle(fontSize: 12, color: AppColors.textSecondary, fontWeight: FontWeight.w500),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 12),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: () async {
+                      final name = nameController.text.trim();
+                      final id = idController.text.trim();
+                      final loc = locationController.text.trim();
+
+                      if (name.isEmpty) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Please enter your full legal name.')),
+                        );
+                        return;
+                      }
+                      if (id.length < 5) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Please enter a valid National ID or Passport number.')),
+                        );
+                        return;
+                      }
+                      if (!confirmedDocs) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Please check the confirmation box to proceed.')),
+                        );
+                        return;
+                      }
+
+                      // Update local state
+                      final updatedUser = _currentUser.copyWith(
+                        name: name,
+                        idNumber: id,
+                        profilePictureUrl: selectedPhoto,
+                        location: loc.isNotEmpty ? loc : _currentUser.location,
+                        isVerified: true,
+                      );
+
+                      setState(() {
+                        _currentUser = updatedUser;
+                      });
+
+                      // Persist to SharedPreferences
+                      try {
+                        final prefs = await SharedPreferences.getInstance();
+                        await prefs.setBool('user_is_verified', true);
+                        await prefs.setString('user_id_number', id);
+                        await prefs.setString('user_profile_photo', selectedPhoto);
+                        await prefs.setString('user_name', name);
+                        if (loc.isNotEmpty) await prefs.setString('user_location', loc);
+                      } catch (_) {}
+
+                      if (!ctx.mounted) return;
+                      Navigator.pop(ctx);
+                      ScaffoldMessenger.of(ctx).showSnackBar(
+                        const SnackBar(
+                          content: Row(
+                            children: [
+                              Icon(Icons.verified_rounded, color: Colors.white),
+                              SizedBox(width: 12),
+                              Expanded(
+                                child: Text('Identity verified successfully! Verified badge activated.'),
+                              ),
+                            ],
+                          ),
+                          backgroundColor: Color(0xFF00B37E),
+                          behavior: SnackBarBehavior.floating,
+                        ),
+                      );
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.primary,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.md)),
+                    ),
+                    child: const Text(
+                      'Confirm & Verify Account',
+                      style: TextStyle(fontWeight: FontWeight.w800, fontSize: 15),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          );
+        },
       ),
     );
   }
@@ -1448,7 +1875,7 @@ class _ChatModalWidgetState extends State<_ChatModalWidget> {
             padding: const EdgeInsets.all(16),
             child: Row(
               children: [
-                TasklyAvatar(initials: widget.initials, size: 42, verified: true),
+                TasklyAvatar(initials: widget.initials, size: 42, verified: false),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Column(
