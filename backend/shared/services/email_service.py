@@ -56,6 +56,7 @@ class EmailService:
             return False
 
         self._refresh_config()
+        errors = []
 
         # Provider 1: Standard SMTP (Gmail, Brevo, or custom SMTP)
         # Prioritized if SMTP credentials are provided
@@ -76,9 +77,9 @@ class EmailService:
             for port in ports_to_try:
                 try:
                     if port == 465:
-                        server = smtplib.SMTP_SSL(self.smtp_host, port, timeout=12)
+                        server = smtplib.SMTP_SSL(self.smtp_host, port, timeout=10)
                     else:
-                        server = smtplib.SMTP(self.smtp_host, port, timeout=12)
+                        server = smtplib.SMTP(self.smtp_host, port, timeout=10)
                         server.starttls()
                     server.login(self.smtp_user, self.smtp_password)
                     server.sendmail(from_sender, to_email, msg.as_string())
@@ -89,10 +90,12 @@ class EmailService:
                     self.last_log = log_msg
                     return True
                 except Exception as e:
-                    err_msg = f"SMTP attempt on port {port} failed: {e}"
+                    err_msg = f"SMTP (port {port}) error: {type(e).__name__} - {e}"
                     logger.warning(err_msg)
                     print(f"[SMTP Warning] {err_msg}")
-                    self.last_log = err_msg
+                    errors.append(err_msg)
+        else:
+            errors.append(f"SMTP skipped (configured: user={bool(self.smtp_user)}, pass={bool(self.smtp_password)})")
 
         # Provider 2: Resend API (via HTTP)
         if self.resend_api_key:
@@ -121,12 +124,12 @@ class EmailService:
                         err_msg = f"Resend API error ({resp.status_code}): {resp.text}"
                         logger.error(err_msg)
                         print(f"[Resend Error] {err_msg}")
-                        self.last_log = err_msg
+                        errors.append(err_msg)
             except Exception as e:
-                err_msg = f"Failed to send email via Resend: {e}"
+                err_msg = f"Resend Exception: {type(e).__name__} - {e}"
                 logger.error(err_msg)
                 print(f"[Resend Exception] {err_msg}")
-                self.last_log = err_msg
+                errors.append(err_msg)
 
         # Provider 3: SendGrid API (via HTTP)
         if self.sendgrid_api_key:
@@ -155,17 +158,17 @@ class EmailService:
                         err_msg = f"SendGrid API error ({resp.status_code}): {resp.text}"
                         logger.error(err_msg)
                         print(f"[SendGrid Error] {err_msg}")
-                        self.last_log = err_msg
+                        errors.append(err_msg)
             except Exception as e:
-                err_msg = f"Failed to send email via SendGrid: {e}"
+                err_msg = f"SendGrid Exception: {type(e).__name__} - {e}"
                 logger.error(err_msg)
                 print(f"[SendGrid Exception] {err_msg}")
-                self.last_log = err_msg
+                errors.append(err_msg)
 
-        skip_msg = f"No email credentials configured or all providers failed. Email to {to_email} was not sent."
-        logger.warning(skip_msg)
-        print(f"[Email Skipped] {skip_msg}")
-        self.last_log = skip_msg
+        failure_detail = " | ".join(errors) if errors else "No providers configured"
+        logger.warning(f"Email failed to {to_email}: {failure_detail}")
+        print(f"[Email Failed] {failure_detail}")
+        self.last_log = failure_detail
         return False
 
     def send_registration_email(self, to_email: str, full_name: str, user_type: str) -> bool:
