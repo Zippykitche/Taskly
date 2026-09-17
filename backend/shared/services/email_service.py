@@ -37,6 +37,7 @@ class EmailService:
             self.smtp_password = None
 
         self.resend_api_key = os.getenv("RESEND_API_KEY")
+        self.brevo_api_key = os.getenv("BREVO_API_KEY")
         self.sendgrid_api_key = os.getenv("SENDGRID_API_KEY")
         if self.sendgrid_api_key and "YOUR_KEY" in self.sendgrid_api_key:
             self.sendgrid_api_key = None
@@ -58,8 +59,45 @@ class EmailService:
         self._refresh_config()
         errors = []
 
-        # Provider 1: Standard SMTP (Gmail, Brevo, or custom SMTP)
-        # Prioritized if SMTP credentials are provided
+        # Provider 1: Brevo REST API (HTTPS port 443 - NEVER blocked by cloud free tiers)
+        if self.brevo_api_key:
+            try:
+                brevo_sender_email = os.getenv("BREVO_FROM_EMAIL") or self.smtp_user or "taskly89@gmail.com"
+                with httpx.Client(timeout=10.0) as client:
+                    resp = client.post(
+                        "https://api.brevo.com/v3/smtp/email",
+                        headers={
+                            "api-key": self.brevo_api_key,
+                            "Content-Type": "application/json",
+                            "Accept": "application/json",
+                        },
+                        json={
+                            "sender": {
+                                "name": self.from_name,
+                                "email": brevo_sender_email,
+                            },
+                            "to": [{"email": to_email}],
+                            "subject": subject,
+                            "htmlContent": html_content,
+                        },
+                    )
+                    if resp.status_code in (200, 201):
+                        log_msg = f"Email sent via Brevo to {to_email}: {subject}"
+                        logger.info(log_msg)
+                        print(f"[Brevo] {log_msg}")
+                        self.last_log = log_msg
+                        return True
+                    else:
+                        err_msg = f"Brevo API error ({resp.status_code}): {resp.text}"
+                        logger.error(err_msg)
+                        errors.append(err_msg)
+            except Exception as e:
+                err_msg = f"Brevo Exception: {type(e).__name__} - {e}"
+                logger.error(err_msg)
+                errors.append(err_msg)
+
+        # Provider 2: Standard SMTP (Gmail, Brevo, or custom SMTP)
+        # Note: Render Free plan blocks ports 587, 465, and 25 at the firewall level.
         if self.smtp_user and self.smtp_password:
             from_sender = self.smtp_user if ("@gmail.com" in (self.smtp_user or "").lower()) else self.from_email
             msg = MIMEMultipart("alternative")
@@ -77,9 +115,9 @@ class EmailService:
             for port in ports_to_try:
                 try:
                     if port == 465:
-                        server = smtplib.SMTP_SSL(self.smtp_host, port, timeout=10)
+                        server = smtplib.SMTP_SSL(self.smtp_host, port, timeout=6)
                     else:
-                        server = smtplib.SMTP(self.smtp_host, port, timeout=10)
+                        server = smtplib.SMTP(self.smtp_host, port, timeout=6)
                         server.starttls()
                     server.login(self.smtp_user, self.smtp_password)
                     server.sendmail(from_sender, to_email, msg.as_string())
@@ -97,9 +135,11 @@ class EmailService:
         else:
             errors.append(f"SMTP skipped (configured: user={bool(self.smtp_user)}, pass={bool(self.smtp_password)})")
 
-        # Provider 2: Resend API (via HTTP)
+        # Provider 3: Resend API (via HTTP port 443)
         if self.resend_api_key:
             try:
+                # If custom domain is not set, Resend sandbox requires onboarding@resend.dev
+                resend_sender = os.getenv("RESEND_FROM_EMAIL") or "onboarding@resend.dev"
                 with httpx.Client(timeout=10.0) as client:
                     resp = client.post(
                         "https://api.resend.com/emails",
@@ -108,7 +148,7 @@ class EmailService:
                             "Content-Type": "application/json",
                         },
                         json={
-                            "from": f"{self.from_name} <{self.from_email}>",
+                            "from": f"{self.from_name} <{resend_sender}>",
                             "to": [to_email],
                             "subject": subject,
                             "html": html_content,
@@ -131,7 +171,7 @@ class EmailService:
                 print(f"[Resend Exception] {err_msg}")
                 errors.append(err_msg)
 
-        # Provider 3: SendGrid API (via HTTP)
+        # Provider 4: SendGrid API (via HTTP)
         if self.sendgrid_api_key:
             try:
                 with httpx.Client(timeout=10.0) as client:
