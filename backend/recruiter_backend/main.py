@@ -250,6 +250,40 @@ async def register(user_data: UserRegister, background_tasks: BackgroundTasks, d
             raise HTTPException(status_code=503, detail="Database service temporarily unavailable. Please try again in a moment.")
         raise HTTPException(status_code=400, detail=f"Registration failed: {str(e)}")
 
+class ResendWelcomePayload(BaseModel):
+    email: str
+
+@app.post("/auth/resend-welcome")
+async def resend_welcome(payload: ResendWelcomePayload, db: Session = Depends(get_db)):
+    """Resend the welcome email to an existing registered user."""
+    email = payload.email.strip().lower()
+    user = db.query(User).filter(User.email == email).first()
+    if not user:
+        raise HTTPException(status_code=404, detail=f"No registered user found with email {email}")
+
+    success = email_service.send_registration_email(user.email, user.full_name, user.user_type)
+    return {
+        "status": "success" if success else "error",
+        "message": f"Welcome email {'dispatched successfully' if success else 'failed to dispatch'} to {user.email}",
+        "recipient": user.email,
+        "detail": email_service.last_log
+    }
+
+@app.get("/auth/test-email")
+async def test_email(to: str = "zippyk80@gmail.com"):
+    """Directly test welcome email delivery using Render's configured SMTP / email credentials."""
+    success = email_service.send_registration_email(to, "Zippy", "recruiter")
+    return {
+        "status": "success" if success else "failed",
+        "recipient": to,
+        "smtp_configured": bool(email_service.smtp_user and email_service.smtp_password),
+        "smtp_host": email_service.smtp_host,
+        "smtp_port": email_service.smtp_port,
+        "smtp_user": email_service.smtp_user,
+        "from_email": email_service.from_email,
+        "detail": email_service.last_log
+    }
+
 @app.post("/auth/login", response_model=Token)
 async def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
     """

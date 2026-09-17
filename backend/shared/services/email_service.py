@@ -13,25 +13,38 @@ logger = logging.getLogger("taskly.email_service")
 
 class EmailService:
     def __init__(self):
-        # 1. SMTP Settings (Gmail, Brevo, or custom SMTP)
+        self.last_log = None
+        self._refresh_config()
+
+    def _refresh_config(self):
+        """Refreshes credentials dynamically from environment variables."""
         self.smtp_host = os.getenv("SMTP_HOST", "smtp.gmail.com")
-        self.smtp_port = int(os.getenv("SMTP_PORT", "587"))
+        try:
+            self.smtp_port = int(os.getenv("SMTP_PORT", "587"))
+        except (ValueError, TypeError):
+            self.smtp_port = 587
+
         self.smtp_user = os.getenv("SMTP_USER") or os.getenv("EMAIL_USER")
-        self.smtp_password = os.getenv("SMTP_PASSWORD") or os.getenv("EMAIL_PASSWORD")
+        raw_password = os.getenv("SMTP_PASSWORD") or os.getenv("EMAIL_PASSWORD")
+        if raw_password:
+            clean = raw_password.strip()
+            # Google App passwords often include spaces: 'xxxx yyyy zzzz wwww'
+            if len(clean.replace(" ", "")) == 16:
+                self.smtp_password = clean.replace(" ", "")
+            else:
+                self.smtp_password = clean
+        else:
+            self.smtp_password = None
 
-        # 2. Resend API Settings
         self.resend_api_key = os.getenv("RESEND_API_KEY")
-
-        # 3. SendGrid API Settings
         self.sendgrid_api_key = os.getenv("SENDGRID_API_KEY")
         if self.sendgrid_api_key and "YOUR_KEY" in self.sendgrid_api_key:
-            self.sendgrid_api_key = None  # ignore default placeholder
+            self.sendgrid_api_key = None
 
-        # Sender identity
         resend_default_from = "onboarding@resend.dev" if self.resend_api_key else "noreply@taskly.com"
         self.from_email = (
-            os.getenv("RESEND_FROM_EMAIL")
-            or os.getenv("SMTP_FROM_EMAIL")
+            os.getenv("SMTP_FROM_EMAIL")
+            or os.getenv("RESEND_FROM_EMAIL")
             or os.getenv("SENDGRID_FROM_EMAIL")
             or self.smtp_user
             or resend_default_from
@@ -42,7 +55,46 @@ class EmailService:
         if not to_email:
             return False
 
-        # Provider 1: Resend API (via HTTP)
+        self._refresh_config()
+
+        # Provider 1: Standard SMTP (Gmail, Brevo, or custom SMTP)
+        # Prioritized if SMTP credentials are provided
+        if self.smtp_user and self.smtp_password:
+            from_sender = self.smtp_user if ("@gmail.com" in (self.smtp_user or "").lower()) else self.from_email
+            msg = MIMEMultipart("alternative")
+            msg["Subject"] = subject
+            msg["From"] = f"{self.from_name} <{from_sender}>"
+            msg["To"] = to_email
+            msg.attach(MIMEText(html_content, "html"))
+
+            # Primary port with automatic fallback between 587 (STARTTLS) and 465 (SSL)
+            ports_to_try = [self.smtp_port]
+            alt_port = 465 if self.smtp_port == 587 else 587
+            if alt_port not in ports_to_try:
+                ports_to_try.append(alt_port)
+
+            for port in ports_to_try:
+                try:
+                    if port == 465:
+                        server = smtplib.SMTP_SSL(self.smtp_host, port, timeout=12)
+                    else:
+                        server = smtplib.SMTP(self.smtp_host, port, timeout=12)
+                        server.starttls()
+                    server.login(self.smtp_user, self.smtp_password)
+                    server.sendmail(from_sender, to_email, msg.as_string())
+                    server.quit()
+                    log_msg = f"Email sent via SMTP (port {port}) from {from_sender} to {to_email}: {subject}"
+                    logger.info(log_msg)
+                    print(f"[SMTP] {log_msg}")
+                    self.last_log = log_msg
+                    return True
+                except Exception as e:
+                    err_msg = f"SMTP attempt on port {port} failed: {e}"
+                    logger.warning(err_msg)
+                    print(f"[SMTP Warning] {err_msg}")
+                    self.last_log = err_msg
+
+        # Provider 2: Resend API (via HTTP)
         if self.resend_api_key:
             try:
                 with httpx.Client(timeout=10.0) as client:
@@ -60,17 +112,23 @@ class EmailService:
                         },
                     )
                     if resp.status_code in (200, 201):
-                        logger.info(f"Email sent via Resend to {to_email}: {subject}")
-                        print(f"[Resend] Email sent to {to_email}: {subject}")
+                        log_msg = f"Email sent via Resend to {to_email}: {subject}"
+                        logger.info(log_msg)
+                        print(f"[Resend] {log_msg}")
+                        self.last_log = log_msg
                         return True
                     else:
-                        logger.error(f"Resend API error ({resp.status_code}): {resp.text}")
-                        print(f"[Resend Error]: {resp.text}")
+                        err_msg = f"Resend API error ({resp.status_code}): {resp.text}"
+                        logger.error(err_msg)
+                        print(f"[Resend Error] {err_msg}")
+                        self.last_log = err_msg
             except Exception as e:
-                logger.error(f"Failed to send email via Resend: {e}")
-                print(f"[Resend Exception]: {e}")
+                err_msg = f"Failed to send email via Resend: {e}"
+                logger.error(err_msg)
+                print(f"[Resend Exception] {err_msg}")
+                self.last_log = err_msg
 
-        # Provider 2: SendGrid API (via HTTP)
+        # Provider 3: SendGrid API (via HTTP)
         if self.sendgrid_api_key:
             try:
                 with httpx.Client(timeout=10.0) as client:
@@ -88,44 +146,26 @@ class EmailService:
                         },
                     )
                     if resp.status_code in (200, 202):
-                        logger.info(f"Email sent via SendGrid to {to_email}: {subject}")
-                        print(f"[SendGrid] Email sent to {to_email}: {subject}")
+                        log_msg = f"Email sent via SendGrid to {to_email}: {subject}"
+                        logger.info(log_msg)
+                        print(f"[SendGrid] {log_msg}")
+                        self.last_log = log_msg
                         return True
                     else:
-                        logger.error(f"SendGrid API error ({resp.status_code}): {resp.text}")
-                        print(f"[SendGrid Error]: {resp.text}")
+                        err_msg = f"SendGrid API error ({resp.status_code}): {resp.text}"
+                        logger.error(err_msg)
+                        print(f"[SendGrid Error] {err_msg}")
+                        self.last_log = err_msg
             except Exception as e:
-                logger.error(f"Failed to send email via SendGrid: {e}")
-                print(f"[SendGrid Exception]: {e}")
+                err_msg = f"Failed to send email via SendGrid: {e}"
+                logger.error(err_msg)
+                print(f"[SendGrid Exception] {err_msg}")
+                self.last_log = err_msg
 
-        # Provider 3: Standard SMTP (Gmail, Brevo, custom SMTP)
-        if self.smtp_user and self.smtp_password:
-            try:
-                msg = MIMEMultipart("alternative")
-                msg["Subject"] = subject
-                msg["From"] = f"{self.from_name} <{self.from_email}>"
-                msg["To"] = to_email
-
-                part = MIMEText(html_content, "html")
-                msg.attach(part)
-
-                server = smtplib.SMTP(self.smtp_host, self.smtp_port, timeout=12)
-                server.starttls()
-                server.login(self.smtp_user, self.smtp_password)
-                server.sendmail(self.from_email, to_email, msg.as_string())
-                server.quit()
-                logger.info(f"Email sent via SMTP to {to_email}: {subject}")
-                print(f"[SMTP] Email sent to {to_email}: {subject}")
-                return True
-            except Exception as e:
-                logger.error(f"Failed to send email via SMTP: {e}")
-                print(f"[SMTP Error]: {e}")
-
-        logger.warning(
-            f"No email credentials configured. Email to {to_email} was skipped. "
-            "Please configure SMTP_USER/SMTP_PASSWORD or RESEND_API_KEY."
-        )
-        print(f"[Email Skipped] No credentials configured to send email to {to_email}.")
+        skip_msg = f"No email credentials configured or all providers failed. Email to {to_email} was not sent."
+        logger.warning(skip_msg)
+        print(f"[Email Skipped] {skip_msg}")
+        self.last_log = skip_msg
         return False
 
     def send_registration_email(self, to_email: str, full_name: str, user_type: str) -> bool:
