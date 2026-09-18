@@ -700,6 +700,73 @@ async def get_job_stats(current_user: User = Depends(get_current_recruiter), db:
     
     return stats
 
+# ========== PROFILE & IDENTITY VERIFICATION ==========
+class ProfileUpdateRequest(BaseModel):
+    email: Optional[str] = None
+    phone_number: Optional[str] = None
+    full_name: Optional[str] = None
+    id_number: Optional[str] = None
+    location_city: Optional[str] = None
+    location_area: Optional[str] = None
+    profile_picture_url: Optional[str] = None
+    saved_addresses: Optional[list] = None
+
+@app.post("/users/profile")
+@app.put("/users/profile")
+async def update_user_profile(
+    profile_data: ProfileUpdateRequest,
+    db: Session = Depends(get_db)
+):
+    """
+    Update recruiter/client profile, identity verification details,
+    profile picture, and location in the PostgreSQL database.
+    """
+    clean_email = (profile_data.email or "").strip().lower()
+    clean_phone = (profile_data.phone_number or "").strip()
+
+    user = None
+    if clean_email:
+        user = db.query(User).filter(User.email == clean_email, User.user_type == "recruiter").first()
+    if not user and clean_phone:
+        user = db.query(User).filter(User.phone_number == clean_phone, User.user_type == "recruiter").first()
+
+    if not user:
+        if clean_email:
+            user = User(
+                email=clean_email,
+                phone_number=clean_phone if clean_phone else f"+g_{hashlib.sha256(clean_email.encode()).hexdigest()[:8]}",
+                password=PasswordSecurity.hash_password(os.urandom(24).hex()),
+                full_name=profile_data.full_name or "Client",
+                user_type="recruiter",
+                location_city=profile_data.location_city or "Nairobi",
+                location_area=profile_data.location_area or "Westlands",
+                rating=5.0,
+                total_jobs=0
+            )
+            db.add(user)
+            db.flush()
+        else:
+            raise HTTPException(status_code=404, detail="User account not found.")
+
+    if profile_data.full_name:
+        user.full_name = profile_data.full_name.strip()
+    if profile_data.id_number:
+        user.id_number = profile_data.id_number.strip()
+    if profile_data.profile_picture_url:
+        user.profile_picture_url = profile_data.profile_picture_url
+    if profile_data.location_city:
+        user.location_city = profile_data.location_city.strip()
+    if profile_data.location_area:
+        user.location_area = profile_data.location_area.strip()
+
+    db.commit()
+    db.refresh(user)
+    return {
+        "success": True,
+        "message": "Profile and verification details updated successfully.",
+        "user": user.to_dict()
+    }
+
 # ========== HEALTH & ROOT CHECK ==========
 @app.api_route("/", methods=["GET", "HEAD"])
 async def root():

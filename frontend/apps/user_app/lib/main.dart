@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:shared_theme/shared_theme.dart';
 import 'package:shared_models/shared_models.dart';
@@ -6,6 +7,9 @@ import 'package:shared_components/shared_components.dart';
 import 'package:ai_mock/ai_mock.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:geolocator/geolocator.dart';
+import 'package:http/http.dart' as http;
 import 'auth_screen.dart';
 import 'api_service.dart';
 
@@ -1376,16 +1380,8 @@ class _UserMainNavigationScreenState extends State<UserMainNavigationScreen> {
     final nameController = TextEditingController(text: _currentUser.name);
     final idController = TextEditingController(text: _currentUser.idNumber ?? '');
     final locationController = TextEditingController(text: _currentUser.location);
-    String selectedPhoto = _currentUser.profilePictureUrl ??
-        'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=256&q=80';
+    String selectedPhoto = _currentUser.profilePictureUrl ?? '';
     bool confirmedDocs = false;
-
-    final avatarPresets = [
-      'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=256&q=80',
-      'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=256&q=80',
-      'https://images.unsplash.com/photo-1517841905240-472988babdf9?auto=format&fit=crop&w=256&q=80',
-      'https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?auto=format&fit=crop&w=256&q=80',
-    ];
 
     showModalBottomSheet(
       context: context,
@@ -1443,7 +1439,7 @@ class _UserMainNavigationScreenState extends State<UserMainNavigationScreen> {
                     children: [
                       // Photo Upload Section
                       Text(
-                        '1. PROFILE PHOTO',
+                        '1. PROFILE PHOTO (UPLOAD FROM DEVICE)',
                         style: TextStyle(
                           fontWeight: FontWeight.w800,
                           fontSize: 12,
@@ -1452,56 +1448,116 @@ class _UserMainNavigationScreenState extends State<UserMainNavigationScreen> {
                         ),
                       ),
                       const SizedBox(height: 10),
-                      Row(
-                        children: [
-                          TasklyAvatar(
-                            initials: _currentUser.initials,
-                            imageUrl: selectedPhoto,
-                            size: 68,
-                            verified: false,
-                          ),
-                          const SizedBox(width: 16),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
+                      Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: AppColors.primary.withValues(alpha: 0.05),
+                          borderRadius: BorderRadius.circular(AppRadius.md),
+                          border: Border.all(color: AppColors.primary.withValues(alpha: 0.2)),
+                        ),
+                        child: Column(
+                          children: [
+                            Row(
                               children: [
-                                const Text(
-                                  'Choose Profile Photo',
-                                  style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
+                                TasklyAvatar(
+                                  initials: _currentUser.initials,
+                                  imageUrl: selectedPhoto.isNotEmpty ? selectedPhoto : null,
+                                  size: 72,
+                                  verified: false,
                                 ),
-                                const SizedBox(height: 4),
-                                Text(
-                                  'Select a preset avatar photo to verify your user profile.',
-                                  style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
+                                const SizedBox(width: 16),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        selectedPhoto.isNotEmpty ? 'Photo Selected' : 'No Photo Uploaded',
+                                        style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15),
+                                      ),
+                                      const SizedBox(height: 4),
+                                      Text(
+                                        'Upload a clear picture of yourself directly from your device gallery or camera.',
+                                        style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
+                                      ),
+                                    ],
+                                  ),
                                 ),
                               ],
                             ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 12),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: avatarPresets.map((preset) {
-                          final isSelected = selectedPhoto == preset;
-                          return GestureDetector(
-                            onTap: () => setModalState(() => selectedPhoto = preset),
-                            child: Container(
-                              padding: const EdgeInsets.all(2),
-                              decoration: BoxDecoration(
-                                shape: BoxShape.circle,
-                                border: Border.all(
-                                  color: isSelected ? AppColors.primary : Colors.transparent,
-                                  width: 2.5,
+                            const SizedBox(height: 14),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: OutlinedButton.icon(
+                                    onPressed: () async {
+                                      try {
+                                        final picker = ImagePicker();
+                                        final XFile? image = await picker.pickImage(
+                                          source: ImageSource.gallery,
+                                          maxWidth: 800,
+                                          maxHeight: 800,
+                                          imageQuality: 85,
+                                        );
+                                        if (image != null) {
+                                          final bytes = await image.readAsBytes();
+                                          setModalState(() {
+                                            selectedPhoto = 'data:image/jpeg;base64,${base64Encode(bytes)}';
+                                          });
+                                        }
+                                      } catch (e) {
+                                        ScaffoldMessenger.of(context).showSnackBar(
+                                          SnackBar(content: Text('Could not access gallery: $e')),
+                                        );
+                                      }
+                                    },
+                                    icon: const Icon(Icons.photo_library_outlined, size: 18),
+                                    label: const Text('Choose Photo', style: TextStyle(fontWeight: FontWeight.w700)),
+                                    style: OutlinedButton.styleFrom(
+                                      side: BorderSide(color: AppColors.primary),
+                                      foregroundColor: AppColors.primary,
+                                      padding: const EdgeInsets.symmetric(vertical: 12),
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.md)),
+                                    ),
+                                  ),
                                 ),
-                              ),
-                              child: CircleAvatar(
-                                radius: 24,
-                                backgroundImage: NetworkImage(preset),
-                              ),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: ElevatedButton.icon(
+                                    onPressed: () async {
+                                      try {
+                                        final picker = ImagePicker();
+                                        final XFile? image = await picker.pickImage(
+                                          source: ImageSource.camera,
+                                          maxWidth: 800,
+                                          maxHeight: 800,
+                                          imageQuality: 85,
+                                        );
+                                        if (image != null) {
+                                          final bytes = await image.readAsBytes();
+                                          setModalState(() {
+                                            selectedPhoto = 'data:image/jpeg;base64,${base64Encode(bytes)}';
+                                          });
+                                        }
+                                      } catch (e) {
+                                        ScaffoldMessenger.of(context).showSnackBar(
+                                          SnackBar(content: Text('Could not access camera: $e')),
+                                        );
+                                      }
+                                    },
+                                    icon: const Icon(Icons.camera_alt_outlined, size: 18),
+                                    label: const Text('Take Photo', style: TextStyle(fontWeight: FontWeight.w700)),
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: AppColors.primary,
+                                      foregroundColor: Colors.white,
+                                      padding: const EdgeInsets.symmetric(vertical: 12),
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.md)),
+                                    ),
+                                  ),
+                                ),
+                              ],
                             ),
-                          );
-                        }).toList(),
+                          ],
+                        ),
                       ),
                       const SizedBox(height: 20),
 
@@ -1610,6 +1666,32 @@ class _UserMainNavigationScreenState extends State<UserMainNavigationScreen> {
                         if (loc.isNotEmpty) await prefs.setString('user_location', loc);
                       } catch (_) {}
 
+                      // Sync with PostgreSQL Database via backend API
+                      try {
+                        await ApiService.updateProfile(
+                          email: _currentUser.email,
+                          phone: _currentUser.phone,
+                          fullName: name,
+                          idNumber: id,
+                          locationCity: loc.isNotEmpty ? loc : _currentUser.location,
+                          profilePictureUrl: selectedPhoto,
+                        );
+                      } catch (e) {
+                        debugPrint('Database profile sync notice: $e');
+                      }
+
+                      // Also update Supabase user metadata
+                      try {
+                        await Supabase.instance.client.auth.updateUser(
+                          UserAttributes(data: {
+                            'avatar_url': selectedPhoto,
+                            'full_name': name,
+                            'id_number': id,
+                            'is_verified': true,
+                          }),
+                        );
+                      } catch (_) {}
+
                       if (!ctx.mounted) return;
                       Navigator.pop(ctx);
                       ScaffoldMessenger.of(ctx).showSnackBar(
@@ -1667,13 +1749,6 @@ class _UserMainNavigationScreenState extends State<UserMainNavigationScreen> {
     final locationController = TextEditingController(text: _currentUser.location);
     String selectedPhoto = _currentUser.profilePictureUrl ?? '';
 
-    final avatarPresets = [
-      'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=256&q=80',
-      'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=256&q=80',
-      'https://images.unsplash.com/photo-1517841905240-472988babdf9?auto=format&fit=crop&w=256&q=80',
-      'https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?auto=format&fit=crop&w=256&q=80',
-    ];
-
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -1724,43 +1799,80 @@ class _UserMainNavigationScreenState extends State<UserMainNavigationScreen> {
                             TasklyAvatar(
                               initials: _currentUser.initials,
                               imageUrl: selectedPhoto.isNotEmpty ? selectedPhoto : null,
-                              size: 76,
+                              size: 80,
                               verified: _currentUser.isVerified,
                             ),
-                            const SizedBox(height: 10),
-                            Text(
-                              'Choose Profile Picture',
-                              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.textSecondary),
-                            ),
-                            const SizedBox(height: 10),
+                            const SizedBox(height: 12),
                             Row(
                               mainAxisAlignment: MainAxisAlignment.center,
-                              children: avatarPresets.map((preset) {
-                                final isSelected = selectedPhoto == preset;
-                                return GestureDetector(
-                                  onTap: () => setModalState(() => selectedPhoto = preset),
-                                  child: Container(
-                                    margin: const EdgeInsets.symmetric(horizontal: 6),
-                                    padding: const EdgeInsets.all(2),
-                                    decoration: BoxDecoration(
-                                      shape: BoxShape.circle,
-                                      border: Border.all(
-                                        color: isSelected ? AppColors.primary : Colors.transparent,
-                                        width: 2.5,
-                                      ),
-                                    ),
-                                    child: CircleAvatar(
-                                      radius: 22,
-                                      backgroundImage: NetworkImage(preset),
-                                    ),
+                              children: [
+                                OutlinedButton.icon(
+                                  onPressed: () async {
+                                    try {
+                                      final picker = ImagePicker();
+                                      final XFile? image = await picker.pickImage(
+                                        source: ImageSource.gallery,
+                                        maxWidth: 800,
+                                        maxHeight: 800,
+                                        imageQuality: 85,
+                                      );
+                                      if (image != null) {
+                                        final bytes = await image.readAsBytes();
+                                        setModalState(() {
+                                          selectedPhoto = 'data:image/jpeg;base64,${base64Encode(bytes)}';
+                                        });
+                                      }
+                                    } catch (e) {
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        SnackBar(content: Text('Error selecting photo: $e')),
+                                      );
+                                    }
+                                  },
+                                  icon: const Icon(Icons.photo_library_outlined, size: 16),
+                                  label: const Text('Device Gallery', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
+                                  style: OutlinedButton.styleFrom(
+                                    side: BorderSide(color: AppColors.primary),
+                                    foregroundColor: AppColors.primary,
+                                    visualDensity: VisualDensity.compact,
                                   ),
-                                );
-                              }).toList(),
+                                ),
+                                const SizedBox(width: 8),
+                                ElevatedButton.icon(
+                                  onPressed: () async {
+                                    try {
+                                      final picker = ImagePicker();
+                                      final XFile? image = await picker.pickImage(
+                                        source: ImageSource.camera,
+                                        maxWidth: 800,
+                                        maxHeight: 800,
+                                        imageQuality: 85,
+                                      );
+                                      if (image != null) {
+                                        final bytes = await image.readAsBytes();
+                                        setModalState(() {
+                                          selectedPhoto = 'data:image/jpeg;base64,${base64Encode(bytes)}';
+                                        });
+                                      }
+                                    } catch (e) {
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        SnackBar(content: Text('Error taking photo: $e')),
+                                      );
+                                    }
+                                  },
+                                  icon: const Icon(Icons.camera_alt_outlined, size: 16),
+                                  label: const Text('Camera', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: AppColors.primary,
+                                    foregroundColor: Colors.white,
+                                    visualDensity: VisualDensity.compact,
+                                  ),
+                                ),
+                              ],
                             ),
                           ],
                         ),
                       ),
-                      const SizedBox(height: 24),
+                      const SizedBox(height: 20),
                       TextField(
                         controller: nameController,
                         decoration: const InputDecoration(
@@ -1832,6 +1944,29 @@ class _UserMainNavigationScreenState extends State<UserMainNavigationScreen> {
                         if (selectedPhoto.isNotEmpty) await prefs.setString('user_profile_photo', selectedPhoto);
                       } catch (_) {}
 
+                      // Sync with PostgreSQL Database via backend API
+                      try {
+                        await ApiService.updateProfile(
+                          email: _currentUser.email,
+                          phone: phone.isNotEmpty ? phone : _currentUser.phone,
+                          fullName: name,
+                          locationCity: loc.isNotEmpty ? loc : _currentUser.location,
+                          profilePictureUrl: selectedPhoto.isNotEmpty ? selectedPhoto : _currentUser.profilePictureUrl,
+                        );
+                      } catch (e) {
+                        debugPrint('Database update notice: $e');
+                      }
+
+                      // Also update Supabase user metadata
+                      try {
+                        await Supabase.instance.client.auth.updateUser(
+                          UserAttributes(data: {
+                            'full_name': name,
+                            if (selectedPhoto.isNotEmpty) 'avatar_url': selectedPhoto,
+                          }),
+                        );
+                      } catch (_) {}
+
                       if (!ctx.mounted) return;
                       Navigator.pop(ctx);
                       ScaffoldMessenger.of(ctx).showSnackBar(
@@ -1858,6 +1993,75 @@ class _UserMainNavigationScreenState extends State<UserMainNavigationScreen> {
     );
   }
 
+  Future<String?> _fetchLiveLocation(BuildContext ctx) async {
+    bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+    if (!serviceEnabled) {
+      if (ctx.mounted) {
+        ScaffoldMessenger.of(ctx).showSnackBar(
+          const SnackBar(content: Text('Please enable GPS / Location Services on your device.')),
+        );
+      }
+      return null;
+    }
+
+    LocationPermission permission = await Geolocator.checkPermission();
+    if (permission == LocationPermission.denied) {
+      permission = await Geolocator.requestPermission();
+      if (permission == LocationPermission.denied) {
+        if (ctx.mounted) {
+          ScaffoldMessenger.of(ctx).showSnackBar(
+            const SnackBar(content: Text('Location permission denied.')),
+          );
+        }
+        return null;
+      }
+    }
+
+    if (permission == LocationPermission.deniedForever) {
+      if (ctx.mounted) {
+        ScaffoldMessenger.of(ctx).showSnackBar(
+          const SnackBar(content: Text('Location permission permanently denied. Enable in App Settings.')),
+        );
+      }
+      return null;
+    }
+
+    try {
+      final pos = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(accuracy: LocationAccuracy.high, timeLimit: Duration(seconds: 10)),
+      );
+
+      // Attempt reverse geocode via OpenStreetMap
+      try {
+        final url = Uri.parse(
+          'https://nominatim.openstreetmap.org/reverse?format=json&lat=${pos.latitude}&lon=${pos.longitude}',
+        );
+        final res = await http.get(url, headers: {'User-Agent': 'TasklyUserApp/1.0'});
+        if (res.statusCode == 200) {
+          final data = jsonDecode(res.body);
+          final address = data['address'] as Map<String, dynamic>?;
+          if (address != null) {
+            final road = address['road'] ?? address['suburb'] ?? address['neighbourhood'] ?? address['residential'];
+            final city = address['city'] ?? address['town'] ?? address['state'] ?? address['county'] ?? 'Nairobi';
+            if (road != null) {
+              return 'Live Location: $road, $city';
+            }
+            return 'Live Location: $city, Kenya';
+          }
+        }
+      } catch (_) {}
+
+      return 'Live Location: Lat ${pos.latitude.toStringAsFixed(4)}, Lon ${pos.longitude.toStringAsFixed(4)}, Nairobi';
+    } catch (e) {
+      if (ctx.mounted) {
+        ScaffoldMessenger.of(ctx).showSnackBar(
+          SnackBar(content: Text('Could not fetch live location: $e')),
+        );
+      }
+      return null;
+    }
+  }
+
   void _showAddressesModal() {
     final addresses = List<String>.from(
       _currentUser.savedAddresses.isNotEmpty
@@ -1872,7 +2076,7 @@ class _UserMainNavigationScreenState extends State<UserMainNavigationScreen> {
       builder: (ctx) => StatefulBuilder(
         builder: (context, setModalState) {
           return Container(
-            height: MediaQuery.of(context).size.height * 0.80,
+            height: MediaQuery.of(context).size.height * 0.85,
             decoration: BoxDecoration(
               color: AppColors.surface,
               borderRadius: const BorderRadius.vertical(top: Radius.circular(AppRadius.xl)),
@@ -1904,7 +2108,7 @@ class _UserMainNavigationScreenState extends State<UserMainNavigationScreen> {
                         ),
                         const SizedBox(height: 2),
                         Text(
-                          'Manage your service delivery and home locations',
+                          'Manage your service delivery and live locations',
                           style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
                         ),
                       ],
@@ -1920,7 +2124,7 @@ class _UserMainNavigationScreenState extends State<UserMainNavigationScreen> {
                   child: addresses.isEmpty
                       ? Center(
                           child: Text(
-                            'No saved addresses. Add an address below.',
+                            'No saved addresses. Add or detect live location below.',
                             style: TextStyle(color: AppColors.textSecondary),
                           ),
                         )
@@ -1931,47 +2135,123 @@ class _UserMainNavigationScreenState extends State<UserMainNavigationScreen> {
                             final addr = addresses[index];
                             final isDefault = index == 0;
                             return Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                               decoration: AppCards.surface(radius: AppRadius.md),
                               child: Row(
                                 children: [
-                                  Container(
-                                    padding: const EdgeInsets.all(8),
-                                    decoration: BoxDecoration(
-                                      color: AppColors.primary.withValues(alpha: 0.12),
-                                      shape: BoxShape.circle,
+                                  GestureDetector(
+                                    onTap: () async {
+                                      if (!isDefault) {
+                                        final selected = addresses.removeAt(index);
+                                        addresses.insert(0, selected);
+                                        setModalState(() {});
+                                        setState(() {
+                                          _currentUser = _currentUser.copyWith(
+                                            savedAddresses: addresses,
+                                            location: selected,
+                                          );
+                                        });
+                                        try {
+                                          final prefs = await SharedPreferences.getInstance();
+                                          await prefs.setStringList('user_saved_addresses', addresses);
+                                          await prefs.setString('user_location', selected);
+                                          await ApiService.updateProfile(
+                                            email: _currentUser.email,
+                                            locationCity: selected,
+                                          );
+                                        } catch (_) {}
+                                      }
+                                    },
+                                    child: Container(
+                                      padding: const EdgeInsets.all(8),
+                                      decoration: BoxDecoration(
+                                        color: (isDefault ? AppColors.primary : AppColors.textMuted).withValues(alpha: 0.12),
+                                        shape: BoxShape.circle,
+                                      ),
+                                      child: Icon(
+                                        Icons.location_on_rounded,
+                                        color: isDefault ? AppColors.primary : AppColors.textMuted,
+                                        size: 20,
+                                      ),
                                     ),
-                                    child: Icon(Icons.location_on_rounded, color: AppColors.primary, size: 20),
                                   ),
-                                  const SizedBox(width: 14),
+                                  const SizedBox(width: 12),
                                   Expanded(
-                                    child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      children: [
-                                        Text(
-                                          addr,
-                                          style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
-                                        ),
-                                        if (isDefault) ...[
+                                    child: GestureDetector(
+                                      onTap: () async {
+                                        if (!isDefault) {
+                                          final selected = addresses.removeAt(index);
+                                          addresses.insert(0, selected);
+                                          setModalState(() {});
+                                          setState(() {
+                                            _currentUser = _currentUser.copyWith(
+                                              savedAddresses: addresses,
+                                              location: selected,
+                                            );
+                                          });
+                                          try {
+                                            final prefs = await SharedPreferences.getInstance();
+                                            await prefs.setStringList('user_saved_addresses', addresses);
+                                            await prefs.setString('user_location', selected);
+                                            await ApiService.updateProfile(
+                                              email: _currentUser.email,
+                                              locationCity: selected,
+                                            );
+                                          } catch (_) {}
+                                        }
+                                      },
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            addr,
+                                            style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
+                                          ),
                                           const SizedBox(height: 2),
-                                          Container(
-                                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
-                                            decoration: BoxDecoration(
-                                              color: AppColors.primary.withValues(alpha: 0.15),
-                                              borderRadius: BorderRadius.circular(4),
-                                            ),
-                                            child: Text(
-                                              'Default Address',
-                                              style: TextStyle(color: AppColors.primary, fontSize: 10, fontWeight: FontWeight.w800),
+                                          Text(
+                                            isDefault ? 'Default Address (Tap to change default)' : 'Tap to make Default',
+                                            style: TextStyle(
+                                              color: isDefault ? AppColors.primary : AppColors.textMuted,
+                                              fontSize: 11,
+                                              fontWeight: isDefault ? FontWeight.w800 : FontWeight.w500,
                                             ),
                                           ),
                                         ],
-                                      ],
+                                      ),
                                     ),
+                                  ),
+                                  // Edit Address Button
+                                  IconButton(
+                                    icon: Icon(Icons.edit_outlined, size: 20, color: AppColors.primary),
+                                    tooltip: 'Change Address',
+                                    onPressed: () {
+                                      _showEditAddressDialog(context, initialAddress: addr, onUpdated: (newAddr) async {
+                                        setModalState(() {
+                                          addresses[index] = newAddr;
+                                        });
+                                        final newLoc = index == 0 ? newAddr : _currentUser.location;
+                                        setState(() {
+                                          _currentUser = _currentUser.copyWith(
+                                            savedAddresses: addresses,
+                                            location: newLoc,
+                                          );
+                                        });
+                                        try {
+                                          final prefs = await SharedPreferences.getInstance();
+                                          await prefs.setStringList('user_saved_addresses', addresses);
+                                          if (index == 0) await prefs.setString('user_location', newAddr);
+                                          await ApiService.updateProfile(
+                                            email: _currentUser.email,
+                                            locationCity: newAddr,
+                                          );
+                                        } catch (_) {}
+                                      });
+                                    },
                                   ),
                                   if (addresses.length > 1)
                                     IconButton(
                                       icon: const Icon(Icons.delete_outline_rounded, size: 20, color: Colors.redAccent),
+                                      tooltip: 'Delete Address',
                                       onPressed: () async {
                                         setModalState(() {
                                           addresses.removeAt(index);
@@ -1994,33 +2274,100 @@ class _UserMainNavigationScreenState extends State<UserMainNavigationScreen> {
                           },
                         ),
                 ),
-                const SizedBox(height: 12),
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton.icon(
-                    onPressed: () {
-                      _showAddAddressDialog(context, (newAddr) async {
-                        setModalState(() {
-                          addresses.add(newAddr);
-                        });
-                        setState(() {
-                          _currentUser = _currentUser.copyWith(savedAddresses: addresses);
-                        });
-                        try {
-                          final prefs = await SharedPreferences.getInstance();
-                          await prefs.setStringList('user_saved_addresses', addresses);
-                        } catch (_) {}
-                      });
-                    },
-                    icon: const Icon(Icons.add_location_alt_outlined),
-                    label: const Text('Add New Address', style: TextStyle(fontWeight: FontWeight.w800)),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.primary,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.md)),
+                const SizedBox(height: 14),
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: () async {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Row(
+                                children: [
+                                  SizedBox(
+                                    width: 16,
+                                    height: 16,
+                                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                                  ),
+                                  SizedBox(width: 12),
+                                  Text('Detecting live GPS location...'),
+                                ],
+                              ),
+                              duration: Duration(seconds: 2),
+                            ),
+                          );
+                          final liveLoc = await _fetchLiveLocation(context);
+                          if (liveLoc != null) {
+                            setModalState(() {
+                              addresses.insert(0, liveLoc);
+                            });
+                            setState(() {
+                              _currentUser = _currentUser.copyWith(
+                                savedAddresses: addresses,
+                                location: liveLoc,
+                              );
+                            });
+                            try {
+                              final prefs = await SharedPreferences.getInstance();
+                              await prefs.setStringList('user_saved_addresses', addresses);
+                              await prefs.setString('user_location', liveLoc);
+                              await ApiService.updateProfile(
+                                email: _currentUser.email,
+                                locationCity: liveLoc,
+                              );
+                            } catch (_) {}
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text('Live location saved and set as default!'),
+                                  backgroundColor: Color(0xFF00B37E),
+                                ),
+                              );
+                            }
+                          }
+                        },
+                        icon: const Icon(Icons.my_location_rounded, size: 18),
+                        label: const Text('Live Location', style: TextStyle(fontWeight: FontWeight.w800)),
+                        style: OutlinedButton.styleFrom(
+                          side: BorderSide(color: AppColors.primary),
+                          foregroundColor: AppColors.primary,
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.md)),
+                        ),
+                      ),
                     ),
-                  ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: ElevatedButton.icon(
+                        onPressed: () {
+                          _showAddAddressDialog(context, (newAddr) async {
+                            setModalState(() {
+                              addresses.add(newAddr);
+                            });
+                            setState(() {
+                              _currentUser = _currentUser.copyWith(savedAddresses: addresses);
+                            });
+                            try {
+                              final prefs = await SharedPreferences.getInstance();
+                              await prefs.setStringList('user_saved_addresses', addresses);
+                              await ApiService.updateProfile(
+                                email: _currentUser.email,
+                                locationCity: newAddr,
+                              );
+                            } catch (_) {}
+                          });
+                        },
+                        icon: const Icon(Icons.add_location_alt_outlined, size: 18),
+                        label: const Text('Add Address', style: TextStyle(fontWeight: FontWeight.w800)),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppColors.primary,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.md)),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),
@@ -2068,6 +2415,21 @@ class _UserMainNavigationScreenState extends State<UserMainNavigationScreen> {
                 hintText: 'e.g. Kilimani, Argwings Kodhek Rd',
               ),
             ),
+            const SizedBox(height: 8),
+            Align(
+              alignment: Alignment.centerRight,
+              child: TextButton.icon(
+                onPressed: () async {
+                  final liveLoc = await _fetchLiveLocation(parentContext);
+                  if (liveLoc != null) {
+                    final cleanLoc = liveLoc.replaceFirst('Live Location: ', '');
+                    streetController.text = cleanLoc;
+                  }
+                },
+                icon: const Icon(Icons.my_location_rounded, size: 15),
+                label: const Text('Fill Live GPS', style: TextStyle(fontSize: 12)),
+              ),
+            ),
           ],
         ),
         actions: [
@@ -2085,6 +2447,90 @@ class _UserMainNavigationScreenState extends State<UserMainNavigationScreen> {
               Navigator.pop(dCtx);
             },
             child: const Text('Add Address'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showEditAddressDialog(BuildContext parentContext, {required String initialAddress, required ValueChanged<String> onUpdated}) {
+    String initialLabel = 'Home';
+    String initialStreet = initialAddress;
+    String selectedCounty = 'Nairobi';
+
+    if (initialAddress.contains(':')) {
+      final parts = initialAddress.split(':');
+      initialLabel = parts[0].trim();
+      initialStreet = parts.sublist(1).join(':').trim();
+    }
+
+    final labelController = TextEditingController(text: initialLabel);
+    final streetController = TextEditingController(text: initialStreet);
+
+    showDialog(
+      context: parentContext,
+      builder: (dCtx) => AlertDialog(
+        title: const Text('Change Address', style: TextStyle(fontWeight: FontWeight.w900)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: labelController,
+              decoration: const InputDecoration(
+                labelText: 'Address Label (e.g. Home, Office, Gym)',
+              ),
+            ),
+            const SizedBox(height: 12),
+            DropdownButtonFormField<String>(
+              value: selectedCounty,
+              decoration: const InputDecoration(labelText: 'County'),
+              items: kenyaCountiesAndLocations.keys
+                  .take(8)
+                  .map((c) => DropdownMenuItem(value: c, child: Text(c)))
+                  .toList(),
+              onChanged: (v) {
+                if (v != null) selectedCounty = v;
+              },
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: streetController,
+              decoration: const InputDecoration(
+                labelText: 'Specific Area / Estate / Street',
+              ),
+            ),
+            const SizedBox(height: 8),
+            Align(
+              alignment: Alignment.centerRight,
+              child: TextButton.icon(
+                onPressed: () async {
+                  final liveLoc = await _fetchLiveLocation(parentContext);
+                  if (liveLoc != null) {
+                    final cleanLoc = liveLoc.replaceFirst('Live Location: ', '');
+                    streetController.text = cleanLoc;
+                  }
+                },
+                icon: const Icon(Icons.my_location_rounded, size: 15),
+                label: const Text('Fill Live GPS', style: TextStyle(fontSize: 12)),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dCtx),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              final street = streetController.text.trim();
+              final label = labelController.text.trim();
+              if (street.isEmpty) return;
+              final fullAddress = label.isNotEmpty ? '$label: $street' : street;
+              onUpdated(fullAddress);
+              Navigator.pop(dCtx);
+            },
+            child: const Text('Save Changes'),
           ),
         ],
       ),

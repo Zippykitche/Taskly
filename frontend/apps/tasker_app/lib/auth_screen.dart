@@ -10,6 +10,7 @@ enum TaskerAuthScreenView { welcome, signIn, signUp }
 class GoogleLogoPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
+    if (size.width <= 0 || size.height <= 0) return;
     final double w = size.width;
     final double h = size.height;
 
@@ -68,8 +69,10 @@ class GreenWaveSpherePainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
+    if (size.width <= 0 || size.height <= 0) return;
     final w = size.width;
     final h = size.height;
+    if (w.isNaN || h.isNaN || w.isInfinite || h.isInfinite) return;
 
     // 1. Base Gradient Background
     final bgPaint = Paint()
@@ -136,12 +139,16 @@ class GreenWaveSpherePainter extends CustomPainter {
       required Color darkColor,
       double shadowBlur = 24,
     }) {
+      if (radius <= 0 || radius.isNaN || radius.isInfinite) return;
+      if (center.dx.isNaN || center.dy.isNaN) return;
+
       // Soft Ambient Drop Shadow
+      final safeBlur = shadowBlur > 0 ? shadowBlur : 1.0;
       final shadowPaint = Paint()
         ..color = Colors.black.withValues(alpha: 0.45)
-        ..maskFilter = MaskFilter.blur(BlurStyle.normal, shadowBlur);
+        ..maskFilter = MaskFilter.blur(BlurStyle.normal, safeBlur);
       canvas.drawCircle(
-        center.translate(shadowBlur * 0.2, shadowBlur * 0.35),
+        center.translate(safeBlur * 0.2, safeBlur * 0.35),
         radius,
         shadowPaint,
       );
@@ -150,10 +157,7 @@ class GreenWaveSpherePainter extends CustomPainter {
       final lightOffset = Offset(center.dx - radius * 0.35, center.dy - radius * 0.35);
       final spherePaint = Paint()
         ..shader = RadialGradient(
-          center: Alignment(
-            (lightOffset.dx - center.dx) / radius,
-            (lightOffset.dy - center.dy) / radius,
-          ),
+          center: const Alignment(-0.35, -0.35),
           radius: 1.15,
           colors: [
             lightColor,

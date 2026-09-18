@@ -205,4 +205,55 @@ class ApiService {
       };
     }
   }
+
+  static Future<Map<String, dynamic>> updateProfile({
+    required String email,
+    String? phone,
+    String? fullName,
+    String? idNumber,
+    String? locationCity,
+    String? locationArea,
+    String? profilePictureUrl,
+  }) async {
+    final url = Uri.parse('$baseUrl/users/profile');
+    try {
+      final response = await http.post(
+        url,
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'email': email.trim().toLowerCase(),
+          'phone_number': phone?.trim(),
+          'full_name': fullName?.trim(),
+          'id_number': idNumber?.trim(),
+          'location_city': locationCity?.trim(),
+          'location_area': locationArea?.trim(),
+          'profile_picture_url': profilePictureUrl,
+        }),
+      );
+
+      dynamic data;
+      try {
+        data = jsonDecode(response.body);
+      } catch (_) {}
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        return {
+          'success': true,
+          'message': data is Map && data.containsKey('message') ? data['message'] : 'Profile updated in database!',
+          'user': data is Map ? data['user'] : null,
+        };
+      } else {
+        final errorMsg = data is Map && data.containsKey('detail') ? data['detail'].toString() : 'Failed to update profile in database.';
+        return {
+          'success': false,
+          'message': errorMsg,
+        };
+      }
+    } catch (e) {
+      return {
+        'success': false,
+        'message': 'Failed to connect to backend: $e',
+      };
+    }
+  }
 }

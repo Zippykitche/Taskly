@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:shared_theme/shared_theme.dart';
@@ -313,9 +314,27 @@ class TasklyAvatar extends StatelessWidget {
             border: Border.all(color: AppColors.border, width: 1.5),
           ),
           child: ClipOval(
-            child: hasImage
-                ? Image.network(
-                    imageUrl!,
+            child: () {
+              if (!hasImage) {
+                return Center(
+                  child: Text(
+                    initials,
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w900,
+                      fontSize: size * .32,
+                      letterSpacing: -0.5,
+                    ),
+                  ),
+                );
+              }
+              final url = imageUrl!.trim();
+              if (url.startsWith('data:image')) {
+                try {
+                  final base64Data = url.contains(',') ? url.split(',')[1] : url;
+                  final bytes = base64Decode(base64Data);
+                  return Image.memory(
+                    bytes,
                     width: size,
                     height: size,
                     fit: BoxFit.cover,
@@ -330,18 +349,27 @@ class TasklyAvatar extends StatelessWidget {
                         ),
                       ),
                     ),
-                  )
-                : Center(
-                    child: Text(
-                      initials,
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w900,
-                        fontSize: size * .32,
-                        letterSpacing: -0.5,
-                      ),
+                  );
+                } catch (_) {}
+              }
+              return Image.network(
+                url,
+                width: size,
+                height: size,
+                fit: BoxFit.cover,
+                errorBuilder: (_, __, ___) => Center(
+                  child: Text(
+                    initials,
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w900,
+                      fontSize: size * .32,
+                      letterSpacing: -0.5,
                     ),
                   ),
+                ),
+              );
+            }(),
           ),
         ),
         if (verified)
@@ -887,6 +915,7 @@ class GoogleLogoWidget extends StatelessWidget {
 class _GoogleLogoPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
+    if (size.width <= 0 || size.height <= 0) return;
     final double center = size.width / 2;
     final double radius = size.width / 2;
     final double strokeWidth = size.width * 0.22;
