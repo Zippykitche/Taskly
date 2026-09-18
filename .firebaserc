@@ -1,0 +1,18 @@
+{
+  "projects": {
+    "default": "taskly-user"
+  },
+  "targets": {
+    "taskly-user": {
+      "hosting": {
+        "user": [
+          "taskly-user"
+        ],
+        "tasker": [
+          "taskly-tasker"
+        ]
+      }
+    }
+  },
+  "etags": {}
+}

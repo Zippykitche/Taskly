@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 560 180" role="img" aria-labelledby="title">
+  <title id="title">Taskly logo</title>
+  <rect width="560" height="180" rx="28" fill="#ffffff"/>
+  <g transform="translate(24 30)">
+    <rect width="120" height="120" rx="26" fill="#108a45"/>
+    <path d="M28 68 L52 92 L94 42" fill="none" stroke="#ffffff" stroke-width="14" stroke-linecap="round" stroke-linejoin="round"/>
+    <circle cx="112" cy="16" r="10" fill="#108a45"/>
+    <circle cx="112" cy="104" r="10" fill="#108a45"/>
+    <circle cx="80" cy="16" r="10" fill="#108a45"/>
+    <path d="M120 16 H154" stroke="#108a45" stroke-width="12" stroke-linecap="round"/>
+    <path d="M120 104 H154" stroke="#108a45" stroke-width="12" stroke-linecap="round"/>
+    <path d="M92 16 H112" stroke="#108a45" stroke-width="12" stroke-linecap="round"/>
+  </g>
+  <text x="170" y="110" font-family="Inter, Arial, sans-serif" font-size="88" font-weight="700" fill="#166633">Taskly</text>
+</svg>
