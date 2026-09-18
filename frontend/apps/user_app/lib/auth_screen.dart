@@ -333,17 +333,30 @@ class _UserAuthScreenState extends State<UserAuthScreen> {
         final userData = res['user'] as Map<String, dynamic>?;
         final name = (userData?['full_name'] as String?) ??
             (email.contains('@') ? email.split('@').first : 'Customer');
+        final phone = (userData?['phone_number'] as String?);
+        final profilePic = (userData?['profile_picture_url'] as String?);
+        final idNum = (userData?['id_number'] as String?);
+        final isVerified = (userData?['is_verified'] as bool?) ??
+            ((idNum != null && idNum.isNotEmpty && profilePic != null && profilePic.isNotEmpty) ? true : false);
+        final locCity = (userData?['location_city'] as String?) ?? _selectedLocation;
+        final locArea = (userData?['location_area'] as String?) ?? _selectedCounty;
+        final loc = (locCity.isNotEmpty && locArea.isNotEmpty && locCity != locArea)
+            ? '$locCity, $locArea'
+            : (locCity.isNotEmpty ? locCity : '$_selectedLocation, $_selectedCounty');
 
         final user = TasklyUser(
           name: name,
           email: (userData?['email'] as String?) ?? email,
           password: password,
           initials: _getInitials(name),
-          location: '$_selectedLocation, $_selectedCounty',
+          location: loc,
+          phone: (phone != null && phone.isNotEmpty) ? phone : null,
+          profilePictureUrl: (profilePic != null && profilePic.isNotEmpty) ? profilePic : null,
+          idNumber: (idNum != null && idNum.isNotEmpty) ? idNum : null,
           rating: 0.0,
           tasksCount: 0,
           savedCount: 0,
-          isVerified: false,
+          isVerified: isVerified,
         );
 
         widget.onAuthenticated(user);
@@ -470,13 +483,16 @@ class _UserAuthScreenState extends State<UserAuthScreen> {
         (user.userMetadata?['name'] as String?) ??
         (email.contains('@') ? email.split('@').first : 'Customer');
     final initials = _getInitials(fullName);
+    final avatarUrl = (user.userMetadata?['avatar_url'] as String?) ??
+        (user.userMetadata?['picture'] as String?);
 
-    final googleUser = TasklyUser(
+    var googleUser = TasklyUser(
       name: fullName,
       email: email,
       password: '',
       initials: initials,
       location: 'Nairobi, Kenya',
+      profilePictureUrl: avatarUrl,
       rating: 0.0,
       tasksCount: 0,
       savedCount: 0,
@@ -485,12 +501,30 @@ class _UserAuthScreenState extends State<UserAuthScreen> {
 
     // Sync with backend PostgreSQL database as recruiter
     try {
-      await ApiService.googleSignIn(
+      final googleRes = await ApiService.googleSignIn(
         email: email,
         name: fullName,
-        photoUrl: user.userMetadata?['avatar_url'] as String?,
+        photoUrl: avatarUrl,
         idToken: session.accessToken,
       );
+      if (googleRes['user'] != null && googleRes['user'] is Map) {
+        final u = googleRes['user'] as Map<String, dynamic>;
+        final phone = u['phone_number'] as String?;
+        final photo = (u['profile_picture_url'] as String?) ?? avatarUrl;
+        final idNum = u['id_number'] as String?;
+        final locCity = u['location_city'] as String?;
+        final isVerif = (u['is_verified'] as bool?) ??
+            ((idNum != null && idNum.isNotEmpty && photo != null && photo.isNotEmpty) ? true : false);
+
+        googleUser = googleUser.copyWith(
+          name: (u['full_name'] as String?) ?? googleUser.name,
+          phone: (phone != null && phone.isNotEmpty) ? phone : googleUser.phone,
+          profilePictureUrl: (photo != null && photo.isNotEmpty) ? photo : googleUser.profilePictureUrl,
+          idNumber: (idNum != null && idNum.isNotEmpty) ? idNum : googleUser.idNumber,
+          location: (locCity != null && locCity.isNotEmpty) ? locCity : googleUser.location,
+          isVerified: isVerif,
+        );
+      }
     } catch (_) {}
 
     if (!mounted) return;

@@ -62,12 +62,16 @@ class _TasklyUserAppState extends State<TasklyUserApp> {
               ? parts.map((e) => e.isNotEmpty ? e[0] : '').take(2).join().toUpperCase()
               : 'U';
 
+          final avatarUrl = (user.userMetadata?['avatar_url'] as String?) ??
+              (user.userMetadata?['picture'] as String?);
+
           final authedUser = TasklyUser(
             name: fullName,
             email: email,
             password: '',
             initials: initials.isNotEmpty ? initials : 'U',
             location: 'Nairobi, Kenya',
+            profilePictureUrl: avatarUrl,
             rating: 0.0,
             tasksCount: 0,
             savedCount: 0,
@@ -78,7 +82,7 @@ class _TasklyUserAppState extends State<TasklyUserApp> {
             ApiService.googleSignIn(
               email: email,
               name: fullName,
-              photoUrl: user.userMetadata?['avatar_url'] as String?,
+              photoUrl: avatarUrl,
               idToken: session?.accessToken,
             );
           } catch (_) {}
@@ -194,6 +198,7 @@ class _TasklyUserAppState extends State<TasklyUserApp> {
                   : UserMainNavigationScreen(
                       currentUser: _authenticatedUser!,
                       onLogout: _handleLogout,
+                      onUserUpdated: (u) => setState(() => _authenticatedUser = u),
                     ),
         );
       },
@@ -206,10 +211,12 @@ class UserMainNavigationScreen extends StatefulWidget {
     super.key,
     required this.currentUser,
     this.onLogout,
+    this.onUserUpdated,
   });
 
   final TasklyUser currentUser;
   final VoidCallback? onLogout;
+  final ValueChanged<TasklyUser>? onUserUpdated;
 
   @override
   State<UserMainNavigationScreen> createState() => _UserMainNavigationScreenState();
@@ -286,7 +293,7 @@ class _UserMainNavigationScreenState extends State<UserMainNavigationScreen> {
         onTap: (index) => setState(() => _currentIndex = index),
         items: const [
           BottomNavigationBarItem(icon: Icon(Icons.explore_rounded), label: 'Explore'),
-          BottomNavigationBarItem(icon: Icon(Icons.auto_awesome_rounded), label: 'AI Concierge'),
+          BottomNavigationBarItem(icon: Icon(Icons.auto_awesome_rounded), label: 'Assistant'),
           BottomNavigationBarItem(icon: Icon(Icons.calendar_today_rounded), label: 'Bookings'),
           BottomNavigationBarItem(icon: Icon(Icons.chat_bubble_outline_rounded), label: 'Chat'),
           BottomNavigationBarItem(icon: Icon(Icons.person_outline_rounded), label: 'Profile'),
@@ -400,7 +407,7 @@ class _UserMainNavigationScreenState extends State<UserMainNavigationScreen> {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: const [
                                 Text(
-                                  'Taskly AI Concierge',
+                                  'Taskly Smart Assistant',
                                   style: TextStyle(
                                     color: Colors.white,
                                     fontSize: 16,
@@ -410,7 +417,7 @@ class _UserMainNavigationScreenState extends State<UserMainNavigationScreen> {
                                 ),
                                 SizedBox(height: 3),
                                 Text(
-                                  'Describe what you need in plain words & get matched instantly',
+                                  'Tell us what you need in plain words & get matched instantly',
                                   style: TextStyle(
                                     color: Colors.white70,
                                     fontSize: 12,
@@ -431,44 +438,55 @@ class _UserMainNavigationScreenState extends State<UserMainNavigationScreen> {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Row(
-                        children: [
-                          Text(
-                            'Popular Projects',
-                            style: context.type.titleLarge?.copyWith(
-                              fontWeight: FontWeight.w900,
-                              letterSpacing: -0.3,
-                            ),
-                          ),
-                          if (_selectedCategory != 'All') ...[
-                            const SizedBox(width: 8),
-                            GestureDetector(
-                              onTap: () => setState(() => _selectedCategory = 'All'),
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                                decoration: BoxDecoration(
-                                  color: AppColors.primary.withValues(alpha: 0.15),
-                                  borderRadius: BorderRadius.circular(12),
+                      Expanded(
+                        child: Row(
+                          children: [
+                            Flexible(
+                              child: Text(
+                                'Popular Projects',
+                                style: context.type.titleLarge?.copyWith(
+                                  fontWeight: FontWeight.w900,
+                                  letterSpacing: -0.3,
                                 ),
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Text(
-                                      _selectedCategory,
-                                      style: TextStyle(
-                                        color: AppColors.primary,
-                                        fontWeight: FontWeight.w700,
-                                        fontSize: 11,
-                                      ),
-                                    ),
-                                    const SizedBox(width: 4),
-                                    Icon(Icons.close_rounded, size: 12, color: AppColors.primary),
-                                  ],
-                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
                               ),
                             ),
+                            if (_selectedCategory != 'All') ...[
+                              const SizedBox(width: 8),
+                              GestureDetector(
+                                onTap: () => setState(() => _selectedCategory = 'All'),
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                  decoration: BoxDecoration(
+                                    color: AppColors.primary.withValues(alpha: 0.15),
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      ConstrainedBox(
+                                        constraints: const BoxConstraints(maxWidth: 80),
+                                        child: Text(
+                                          _selectedCategory,
+                                          style: TextStyle(
+                                            color: AppColors.primary,
+                                            fontWeight: FontWeight.w700,
+                                            fontSize: 11,
+                                          ),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 4),
+                                      Icon(Icons.close_rounded, size: 12, color: AppColors.primary),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ],
                           ],
-                        ],
+                        ),
                       ),
                       TextButton(
                         onPressed: _showAllCategoriesModal,
@@ -873,19 +891,29 @@ class _UserMainNavigationScreenState extends State<UserMainNavigationScreen> {
                                 overflow: TextOverflow.ellipsis,
                               ),
                             ),
-                            if (_currentUser.phone != null && _currentUser.phone!.isNotEmpty) ...[
-                              const SizedBox(width: 6),
-                              Text(
-                                '• ${_currentUser.phone}',
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w500,
-                                  color: AppColors.textMuted,
+                          ],
+                        ),
+                        if (_currentUser.phone != null && _currentUser.phone!.isNotEmpty) ...[
+                          const SizedBox(height: 3),
+                          Row(
+                            children: [
+                              Icon(Icons.phone_outlined, size: 13, color: AppColors.textMuted),
+                              const SizedBox(width: 4),
+                              Expanded(
+                                child: Text(
+                                  _currentUser.phone!,
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w500,
+                                    color: AppColors.textMuted,
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
                                 ),
                               ),
                             ],
-                          ],
-                        ),
+                          ),
+                        ],
                       ],
                     ),
                   ),
@@ -1625,9 +1653,11 @@ class _UserMainNavigationScreenState extends State<UserMainNavigationScreen> {
                                           });
                                         }
                                       } catch (e) {
-                                        ScaffoldMessenger.of(context).showSnackBar(
-                                          SnackBar(content: Text('Could not access gallery: $e')),
-                                        );
+                                        if (ctx.mounted) {
+                                          ScaffoldMessenger.of(ctx).showSnackBar(
+                                            SnackBar(content: Text('Could not access gallery: $e')),
+                                          );
+                                        }
                                       }
                                     },
                                     icon: const Icon(Icons.photo_library_outlined, size: 18),
@@ -1659,9 +1689,11 @@ class _UserMainNavigationScreenState extends State<UserMainNavigationScreen> {
                                           });
                                         }
                                       } catch (e) {
-                                        ScaffoldMessenger.of(context).showSnackBar(
-                                          SnackBar(content: Text('Could not access camera: $e')),
-                                        );
+                                        if (ctx.mounted) {
+                                          ScaffoldMessenger.of(ctx).showSnackBar(
+                                            SnackBar(content: Text('Could not access camera: $e')),
+                                          );
+                                        }
                                       }
                                     },
                                     icon: const Icon(Icons.camera_alt_outlined, size: 18),
@@ -1775,6 +1807,7 @@ class _UserMainNavigationScreenState extends State<UserMainNavigationScreen> {
                       setState(() {
                         _currentUser = updatedUser;
                       });
+                      widget.onUserUpdated?.call(updatedUser);
 
                       // Persist to SharedPreferences
                       try {
@@ -1867,7 +1900,9 @@ class _UserMainNavigationScreenState extends State<UserMainNavigationScreen> {
     final nameController = TextEditingController(text: _currentUser.name);
     final phoneController = TextEditingController(text: _currentUser.phone ?? '');
     final locationController = TextEditingController(text: _currentUser.location);
+    final idController = TextEditingController(text: _currentUser.idNumber ?? '');
     String selectedPhoto = _currentUser.profilePictureUrl ?? '';
+    bool isDetectingGps = false;
 
     showModalBottomSheet(
       context: context,
@@ -1876,7 +1911,7 @@ class _UserMainNavigationScreenState extends State<UserMainNavigationScreen> {
       builder: (ctx) => StatefulBuilder(
         builder: (context, setModalState) {
           return Container(
-            height: MediaQuery.of(context).size.height * 0.85,
+            height: MediaQuery.of(context).size.height * 0.88,
             decoration: BoxDecoration(
               color: AppColors.surface,
               borderRadius: const BorderRadius.vertical(top: Radius.circular(AppRadius.xl)),
@@ -1909,98 +1944,184 @@ class _UserMainNavigationScreenState extends State<UserMainNavigationScreen> {
                     ),
                   ],
                 ),
-                const Divider(height: 24),
+                const Divider(height: 20),
                 Expanded(
                   child: ListView(
                     children: [
+                      // Photo Upload Section
                       Center(
                         child: Column(
                           children: [
                             TasklyAvatar(
                               initials: _currentUser.initials,
                               imageUrl: selectedPhoto.isNotEmpty ? selectedPhoto : null,
-                              size: 80,
+                              size: 84,
                               verified: _currentUser.isVerified,
                             ),
                             const SizedBox(height: 12),
                             Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
                               children: [
-                                OutlinedButton.icon(
-                                  onPressed: () async {
-                                    try {
-                                      final picker = ImagePicker();
-                                      final XFile? image = await picker.pickImage(
-                                        source: ImageSource.gallery,
-                                        maxWidth: 800,
-                                        maxHeight: 800,
-                                        imageQuality: 85,
-                                      );
-                                      if (image != null) {
-                                        final bytes = await image.readAsBytes();
-                                        setModalState(() {
-                                          selectedPhoto = 'data:image/jpeg;base64,${base64Encode(bytes)}';
-                                        });
+                                Expanded(
+                                  child: OutlinedButton.icon(
+                                    onPressed: () async {
+                                      try {
+                                        final picker = ImagePicker();
+                                        final XFile? image = await picker.pickImage(
+                                          source: ImageSource.gallery,
+                                          maxWidth: 600,
+                                          maxHeight: 600,
+                                          imageQuality: 80,
+                                        );
+                                        if (image != null) {
+                                          final bytes = await image.readAsBytes();
+                                          setModalState(() {
+                                            selectedPhoto = 'data:image/jpeg;base64,${base64Encode(bytes)}';
+                                          });
+                                        }
+                                      } catch (e) {
+                                        if (ctx.mounted) {
+                                          ScaffoldMessenger.of(ctx).showSnackBar(
+                                            SnackBar(content: Text('Error selecting photo: $e')),
+                                          );
+                                        }
                                       }
-                                    } catch (e) {
-                                      ScaffoldMessenger.of(context).showSnackBar(
-                                        SnackBar(content: Text('Error selecting photo: $e')),
-                                      );
-                                    }
-                                  },
-                                  icon: const Icon(Icons.photo_library_outlined, size: 16),
-                                  label: const Text('Device Gallery', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
-                                  style: OutlinedButton.styleFrom(
-                                    side: BorderSide(color: AppColors.primary),
-                                    foregroundColor: AppColors.primary,
-                                    visualDensity: VisualDensity.compact,
+                                    },
+                                    icon: const Icon(Icons.photo_library_outlined, size: 16),
+                                    label: const Text('Gallery', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
+                                    style: OutlinedButton.styleFrom(
+                                      side: BorderSide(color: AppColors.primary),
+                                      foregroundColor: AppColors.primary,
+                                      padding: const EdgeInsets.symmetric(vertical: 10),
+                                      visualDensity: VisualDensity.compact,
+                                    ),
                                   ),
                                 ),
                                 const SizedBox(width: 8),
-                                ElevatedButton.icon(
-                                  onPressed: () async {
-                                    try {
-                                      final picker = ImagePicker();
-                                      final XFile? image = await picker.pickImage(
-                                        source: ImageSource.camera,
-                                        maxWidth: 800,
-                                        maxHeight: 800,
-                                        imageQuality: 85,
-                                      );
-                                      if (image != null) {
-                                        final bytes = await image.readAsBytes();
-                                        setModalState(() {
-                                          selectedPhoto = 'data:image/jpeg;base64,${base64Encode(bytes)}';
-                                        });
+                                Expanded(
+                                  child: ElevatedButton.icon(
+                                    onPressed: () async {
+                                      try {
+                                        final picker = ImagePicker();
+                                        final XFile? image = await picker.pickImage(
+                                          source: ImageSource.camera,
+                                          maxWidth: 600,
+                                          maxHeight: 600,
+                                          imageQuality: 80,
+                                        );
+                                        if (image != null) {
+                                          final bytes = await image.readAsBytes();
+                                          setModalState(() {
+                                            selectedPhoto = 'data:image/jpeg;base64,${base64Encode(bytes)}';
+                                          });
+                                        }
+                                      } catch (e) {
+                                        if (ctx.mounted) {
+                                          ScaffoldMessenger.of(ctx).showSnackBar(
+                                            SnackBar(content: Text('Error taking photo: $e')),
+                                          );
+                                        }
                                       }
-                                    } catch (e) {
-                                      ScaffoldMessenger.of(context).showSnackBar(
-                                        SnackBar(content: Text('Error taking photo: $e')),
-                                      );
-                                    }
-                                  },
-                                  icon: const Icon(Icons.camera_alt_outlined, size: 16),
-                                  label: const Text('Camera', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: AppColors.primary,
-                                    foregroundColor: Colors.white,
-                                    visualDensity: VisualDensity.compact,
+                                    },
+                                    icon: const Icon(Icons.camera_alt_outlined, size: 16),
+                                    label: const Text('Camera', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: AppColors.primary,
+                                      foregroundColor: Colors.white,
+                                      padding: const EdgeInsets.symmetric(vertical: 10),
+                                      visualDensity: VisualDensity.compact,
+                                    ),
                                   ),
                                 ),
+                                if (selectedPhoto.isNotEmpty) ...[
+                                  const SizedBox(width: 6),
+                                  IconButton(
+                                    icon: const Icon(Icons.delete_outline_rounded, color: Colors.redAccent, size: 20),
+                                    tooltip: 'Remove photo',
+                                    onPressed: () => setModalState(() => selectedPhoto = ''),
+                                  ),
+                                ],
                               ],
+                            ),
+                            const SizedBox(height: 6),
+                            Text(
+                              selectedPhoto.isNotEmpty
+                                  ? '✓ Profile photo selected'
+                                  : 'Upload clear face photo from your device',
+                              style: TextStyle(
+                                color: selectedPhoto.isNotEmpty ? const Color(0xFF00B37E) : AppColors.textMuted,
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                              ),
                             ),
                           ],
                         ),
                       ),
-                      const SizedBox(height: 20),
+                      const SizedBox(height: 16),
+
+                      // Account Email Banner
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                        decoration: BoxDecoration(
+                          color: AppColors.primary.withValues(alpha: 0.06),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: AppColors.primary.withValues(alpha: 0.2)),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(Icons.alternate_email_rounded, size: 16, color: AppColors.primary),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                _currentUser.email,
+                                style: TextStyle(
+                                  color: AppColors.textPrimary,
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 12,
+                                ),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: AppColors.primary.withValues(alpha: 0.15),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Text(
+                                'Account Email',
+                                style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: AppColors.primary),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 14),
+
+                      // Full Legal Name
                       TextField(
                         controller: nameController,
                         decoration: const InputDecoration(
-                          labelText: 'Full Name',
+                          labelText: 'Full Legal Name',
+                          hintText: 'e.g. Zipporah Wambui',
                           prefixIcon: Icon(Icons.person_outline_rounded),
                         ),
                       ),
                       const SizedBox(height: 14),
+
+                      // Kenyan National ID
+                      TextField(
+                        controller: idController,
+                        keyboardType: TextInputType.text,
+                        decoration: const InputDecoration(
+                          labelText: 'National ID / Passport Number',
+                          hintText: 'e.g. 12345678',
+                          prefixIcon: Icon(Icons.badge_outlined),
+                          helperText: 'Required for verified account badge',
+                        ),
+                      ),
+                      const SizedBox(height: 14),
+
+                      // Phone Number
                       TextField(
                         controller: phoneController,
                         keyboardType: TextInputType.phone,
@@ -2011,12 +2132,30 @@ class _UserMainNavigationScreenState extends State<UserMainNavigationScreen> {
                         ),
                       ),
                       const SizedBox(height: 14),
+
+                      // Location with Live GPS Button
                       TextField(
                         controller: locationController,
-                        decoration: const InputDecoration(
+                        decoration: InputDecoration(
                           labelText: 'Default Area / Location',
                           hintText: 'e.g. Westlands, Nairobi',
-                          prefixIcon: Icon(Icons.location_on_outlined),
+                          prefixIcon: const Icon(Icons.location_on_outlined),
+                          suffixIcon: IconButton(
+                            icon: isDetectingGps
+                                ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                                : Icon(Icons.my_location_rounded, color: AppColors.primary, size: 20),
+                            tooltip: 'Detect Live GPS Location',
+                            onPressed: isDetectingGps
+                                ? null
+                                : () async {
+                                    setModalState(() => isDetectingGps = true);
+                                    final loc = await _fetchLiveLocation(context);
+                                    setModalState(() {
+                                      isDetectingGps = false;
+                                      if (loc != null) locationController.text = loc;
+                                    });
+                                  },
+                          ),
                         ),
                       ),
                     ],
@@ -2030,6 +2169,7 @@ class _UserMainNavigationScreenState extends State<UserMainNavigationScreen> {
                       final name = nameController.text.trim();
                       final phone = phoneController.text.trim();
                       final loc = locationController.text.trim();
+                      final idNum = idController.text.trim();
 
                       if (name.isEmpty) {
                         ScaffoldMessenger.of(context).showSnackBar(
@@ -2043,25 +2183,36 @@ class _UserMainNavigationScreenState extends State<UserMainNavigationScreen> {
                           ? parts.map((e) => e.isNotEmpty ? e[0] : '').take(2).join().toUpperCase()
                           : _currentUser.initials;
 
+                      final isNowVerified = (idNum.isNotEmpty && selectedPhoto.isNotEmpty) || _currentUser.isVerified;
+
                       final updatedUser = _currentUser.copyWith(
                         name: name,
                         initials: initials,
                         phone: phone.isNotEmpty ? phone : null,
+                        idNumber: idNum.isNotEmpty ? idNum : null,
                         location: loc.isNotEmpty ? loc : _currentUser.location,
-                        profilePictureUrl: selectedPhoto.isNotEmpty ? selectedPhoto : _currentUser.profilePictureUrl,
+                        profilePictureUrl: selectedPhoto.isNotEmpty ? selectedPhoto : null,
+                        isVerified: isNowVerified,
                       );
 
                       setState(() {
                         _currentUser = updatedUser;
                       });
+                      widget.onUserUpdated?.call(updatedUser);
 
                       try {
                         final prefs = await SharedPreferences.getInstance();
                         await prefs.setString('user_name', name);
                         await prefs.setString('user_initials', initials);
+                        await prefs.setBool('user_is_verified', isNowVerified);
                         if (phone.isNotEmpty) await prefs.setString('user_phone', phone);
                         if (loc.isNotEmpty) await prefs.setString('user_location', loc);
-                        if (selectedPhoto.isNotEmpty) await prefs.setString('user_profile_photo', selectedPhoto);
+                        if (idNum.isNotEmpty) await prefs.setString('user_id_number', idNum);
+                        if (selectedPhoto.isNotEmpty) {
+                          await prefs.setString('user_profile_photo', selectedPhoto);
+                        } else {
+                          await prefs.remove('user_profile_photo');
+                        }
                       } catch (_) {}
 
                       // Sync with PostgreSQL Database via backend API
@@ -2070,6 +2221,7 @@ class _UserMainNavigationScreenState extends State<UserMainNavigationScreen> {
                           email: _currentUser.email,
                           phone: phone.isNotEmpty ? phone : _currentUser.phone,
                           fullName: name,
+                          idNumber: idNum.isNotEmpty ? idNum : _currentUser.idNumber,
                           locationCity: loc.isNotEmpty ? loc : _currentUser.location,
                           profilePictureUrl: selectedPhoto.isNotEmpty ? selectedPhoto : _currentUser.profilePictureUrl,
                         );
@@ -2082,6 +2234,8 @@ class _UserMainNavigationScreenState extends State<UserMainNavigationScreen> {
                         await Supabase.instance.client.auth.updateUser(
                           UserAttributes(data: {
                             'full_name': name,
+                            'id_number': idNum,
+                            'is_verified': isNowVerified,
                             if (selectedPhoto.isNotEmpty) 'avatar_url': selectedPhoto,
                           }),
                         );
@@ -2090,8 +2244,19 @@ class _UserMainNavigationScreenState extends State<UserMainNavigationScreen> {
                       if (!ctx.mounted) return;
                       Navigator.pop(ctx);
                       ScaffoldMessenger.of(ctx).showSnackBar(
-                        const SnackBar(
-                          content: Text('Profile details updated successfully!'),
+                        SnackBar(
+                          content: Row(
+                            children: [
+                              Icon(isNowVerified ? Icons.verified_rounded : Icons.check_circle_rounded, color: Colors.white),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Text(isNowVerified
+                                    ? 'Profile updated & Identity verified!'
+                                    : 'Profile details saved successfully!'),
+                              ),
+                            ],
+                          ),
+                          backgroundColor: const Color(0xFF00B37E),
                           behavior: SnackBarBehavior.floating,
                         ),
                       );
@@ -2271,6 +2436,7 @@ class _UserMainNavigationScreenState extends State<UserMainNavigationScreen> {
                                             location: selected,
                                           );
                                         });
+                                        widget.onUserUpdated?.call(_currentUser);
                                         try {
                                           final prefs = await SharedPreferences.getInstance();
                                           await prefs.setStringList('user_saved_addresses', addresses);
@@ -2309,6 +2475,7 @@ class _UserMainNavigationScreenState extends State<UserMainNavigationScreen> {
                                               location: selected,
                                             );
                                           });
+                                          widget.onUserUpdated?.call(_currentUser);
                                           try {
                                             final prefs = await SharedPreferences.getInstance();
                                             await prefs.setStringList('user_saved_addresses', addresses);
@@ -2356,6 +2523,7 @@ class _UserMainNavigationScreenState extends State<UserMainNavigationScreen> {
                                             location: newLoc,
                                           );
                                         });
+                                        widget.onUserUpdated?.call(_currentUser);
                                         try {
                                           final prefs = await SharedPreferences.getInstance();
                                           await prefs.setStringList('user_saved_addresses', addresses);
@@ -2382,6 +2550,7 @@ class _UserMainNavigationScreenState extends State<UserMainNavigationScreen> {
                                             location: addresses.isNotEmpty ? addresses.first : _currentUser.location,
                                           );
                                         });
+                                        widget.onUserUpdated?.call(_currentUser);
                                         try {
                                           final prefs = await SharedPreferences.getInstance();
                                           await prefs.setStringList('user_saved_addresses', addresses);
@@ -2427,6 +2596,7 @@ class _UserMainNavigationScreenState extends State<UserMainNavigationScreen> {
                                 location: liveLoc,
                               );
                             });
+                            widget.onUserUpdated?.call(_currentUser);
                             try {
                               final prefs = await SharedPreferences.getInstance();
                               await prefs.setStringList('user_saved_addresses', addresses);
@@ -2467,6 +2637,7 @@ class _UserMainNavigationScreenState extends State<UserMainNavigationScreen> {
                             setState(() {
                               _currentUser = _currentUser.copyWith(savedAddresses: addresses);
                             });
+                            widget.onUserUpdated?.call(_currentUser);
                             try {
                               final prefs = await SharedPreferences.getInstance();
                               await prefs.setStringList('user_saved_addresses', addresses);
@@ -3015,7 +3186,7 @@ class _AiConciergeTabState extends State<AiConciergeTab> {
     {
       'isAi': true,
       'text':
-          'Hi! I am your Taskly AI Concierge. Describe whatever help you need (e.g. "I need someone to deep clean my 2-bedroom home tomorrow morning" or "Assemble my new Ikea closet"), and I will formulate a plan and estimate!',
+          'Hi! I am your Taskly Smart Assistant. Tell me what task you need help with (for example: "I need someone to clean my house tomorrow" or "Fix my leaking pipe"), and I will formulate a plan and match you with the best available taskers!',
     },
   ];
 
@@ -3036,7 +3207,7 @@ class _AiConciergeTabState extends State<AiConciergeTab> {
       _messages.add({
         'isAi': true,
         'text':
-            'I analyzed your request for "${preview.title}". Here is the recommended task specification and budget:',
+            'I analyzed your request for "${preview.title}". Here is the recommended plan and budget:',
       });
     });
   }
@@ -3064,14 +3235,14 @@ class _AiConciergeTabState extends State<AiConciergeTab> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'AI Task Concierge',
+                      'Taskly Smart Assistant',
                       style: context.type.titleLarge?.copyWith(
                         fontWeight: FontWeight.w900,
                         letterSpacing: -0.3,
                       ),
                     ),
                     Text(
-                      'Instant scoping, price estimation & task matching',
+                      'Instant task help, price estimation & tasker matching',
                       style: TextStyle(
                         fontSize: 12,
                         fontWeight: FontWeight.w500,
@@ -3153,7 +3324,7 @@ class _AiConciergeTabState extends State<AiConciergeTab> {
                     controller: _promptController,
                     onSubmitted: _handlePrompt,
                     decoration: InputDecoration(
-                      hintText: 'Tell AI what you need done...',
+                      hintText: 'Ask assistant what you need help with...',
                       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
                       suffixIcon: IconButton(
                         icon: Icon(Icons.send_rounded, color: AppColors.primary),

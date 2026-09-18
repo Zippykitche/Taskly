@@ -1,5 +1,7 @@
 import 'dart:convert';
+import 'dart:io';
 import 'dart:math' as math;
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_theme/shared_theme.dart';
 
@@ -319,60 +321,72 @@ class TasklyAvatar extends StatelessWidget {
           ),
           child: ClipOval(
             child: () {
-              if (!hasImage) {
-                return Center(
-                  child: Text(
-                    initials,
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w900,
-                      fontSize: size * .32,
-                      letterSpacing: -0.5,
+              Widget fallback() => Center(
+                    child: Text(
+                      initials,
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w900,
+                        fontSize: size * .32,
+                        letterSpacing: -0.5,
+                      ),
                     ),
-                  ),
-                );
-              }
+                  );
+
+              if (!hasImage) return fallback();
+
               final url = imageUrl!.trim();
               if (url.startsWith('data:image')) {
                 try {
                   final base64Data = url.contains(',') ? url.split(',')[1] : url;
-                  final bytes = base64Decode(base64Data);
+                  final cleanBase64 = base64Data.replaceAll('\n', '').replaceAll('\r', '').trim();
+                  final bytes = base64Decode(cleanBase64);
                   return Image.memory(
                     bytes,
                     width: size,
                     height: size,
                     fit: BoxFit.cover,
-                    errorBuilder: (_, __, ___) => Center(
-                      child: Text(
-                        initials,
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w900,
-                          fontSize: size * .32,
-                          letterSpacing: -0.5,
-                        ),
-                      ),
-                    ),
+                    errorBuilder: (_, __, ___) => fallback(),
                   );
                 } catch (_) {}
+              } else if (url.startsWith('http://') || url.startsWith('https://')) {
+                return Image.network(
+                  url,
+                  width: size,
+                  height: size,
+                  fit: BoxFit.cover,
+                  errorBuilder: (_, __, ___) => fallback(),
+                );
+              } else if (!kIsWeb) {
+                try {
+                  final path = url.startsWith('file://') ? url.replaceFirst('file://', '') : url;
+                  final file = File(path);
+                  if (file.existsSync()) {
+                    return Image.file(
+                      file,
+                      width: size,
+                      height: size,
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) => fallback(),
+                    );
+                  }
+                } catch (_) {}
               }
-              return Image.network(
-                url,
-                width: size,
-                height: size,
-                fit: BoxFit.cover,
-                errorBuilder: (_, __, ___) => Center(
-                  child: Text(
-                    initials,
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w900,
-                      fontSize: size * .32,
-                      letterSpacing: -0.5,
-                    ),
-                  ),
-                ),
-              );
+
+              // Pure raw base64 fallback
+              try {
+                final cleanBase64 = url.replaceAll('\n', '').replaceAll('\r', '').trim();
+                final bytes = base64Decode(cleanBase64);
+                return Image.memory(
+                  bytes,
+                  width: size,
+                  height: size,
+                  fit: BoxFit.cover,
+                  errorBuilder: (_, __, ___) => fallback(),
+                );
+              } catch (_) {}
+
+              return fallback();
             }(),
           ),
         ),
