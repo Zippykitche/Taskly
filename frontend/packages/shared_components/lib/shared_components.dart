@@ -20,12 +20,12 @@ IconData tasklyIcon(String key) {
 
 String _getCategoryBackground(String name) {
   final normalized = name.toLowerCase();
-  if (normalized.contains('clean')) return 'public/images/cleaner.jpg';
-  if (normalized.contains('baby') || normalized.contains('child')) return 'public/images/babysitter.jpg';
-  if (normalized.contains('cook') || normalized.contains('restaurant')) return 'public/images/cook.jpg';
-  if (normalized.contains('mov') || normalized.contains('shipping')) return 'public/images/movers.jpg';
-  if (normalized.contains('deliver')) return 'public/images/delivery.jpg';
-  return 'public/images/people.jpg';
+  if (normalized.contains('clean')) return 'assets/images/cleaner.jpg';
+  if (normalized.contains('baby') || normalized.contains('child')) return 'assets/images/babysitter.jpg';
+  if (normalized.contains('cook') || normalized.contains('restaurant')) return 'assets/images/cook.jpg';
+  if (normalized.contains('mov') || normalized.contains('shipping')) return 'assets/images/movers.jpg';
+  if (normalized.contains('deliver')) return 'assets/images/delivery.jpg';
+  return 'assets/images/people.jpg';
 }
 
 class CategoryCard extends StatefulWidget {

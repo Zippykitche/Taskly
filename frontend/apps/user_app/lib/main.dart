@@ -296,15 +296,13 @@ class _UserMainNavigationScreenState extends State<UserMainNavigationScreen> {
   }
 
   Widget _buildExploreScreen() {
-    final filteredCategories = serviceCategories.where((c) {
-      if (_selectedCategory == 'All') return true;
-      return c.name.toLowerCase() == _selectedCategory.toLowerCase();
-    }).toList();
-
     final filteredTaskers = taskers.where((t) {
-      if (_searchQuery.isEmpty) return true;
-      return t.name.toLowerCase().contains(_searchQuery.toLowerCase()) ||
-          t.skill.toLowerCase().contains(_searchQuery.toLowerCase());
+      final matchesCategory = _selectedCategory == 'All' ||
+          t.skill.toLowerCase().contains(_selectedCategory.toLowerCase());
+      if (_searchQuery.isEmpty) return matchesCategory;
+      return matchesCategory &&
+          (t.name.toLowerCase().contains(_searchQuery.toLowerCase()) ||
+              t.skill.toLowerCase().contains(_searchQuery.toLowerCase()));
     }).toList();
 
     return SafeArea(
@@ -433,17 +431,49 @@ class _UserMainNavigationScreenState extends State<UserMainNavigationScreen> {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Text(
-                        'Popular Projects',
-                        style: context.type.titleLarge?.copyWith(
-                          fontWeight: FontWeight.w900,
-                          letterSpacing: -0.3,
-                        ),
+                      Row(
+                        children: [
+                          Text(
+                            'Popular Projects',
+                            style: context.type.titleLarge?.copyWith(
+                              fontWeight: FontWeight.w900,
+                              letterSpacing: -0.3,
+                            ),
+                          ),
+                          if (_selectedCategory != 'All') ...[
+                            const SizedBox(width: 8),
+                            GestureDetector(
+                              onTap: () => setState(() => _selectedCategory = 'All'),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                decoration: BoxDecoration(
+                                  color: AppColors.primary.withValues(alpha: 0.15),
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Text(
+                                      _selectedCategory,
+                                      style: TextStyle(
+                                        color: AppColors.primary,
+                                        fontWeight: FontWeight.w700,
+                                        fontSize: 11,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 4),
+                                    Icon(Icons.close_rounded, size: 12, color: AppColors.primary),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ],
+                        ],
                       ),
                       TextButton(
-                        onPressed: () => setState(() => _selectedCategory = 'All'),
+                        onPressed: _showAllCategoriesModal,
                         child: Text(
-                          _selectedCategory == 'All' ? 'View All' : 'Show All',
+                          'View All (${serviceCategories.length})',
                           style: TextStyle(
                             color: AppColors.primary,
                             fontWeight: FontWeight.w700,
@@ -465,14 +495,17 @@ class _UserMainNavigationScreenState extends State<UserMainNavigationScreen> {
               child: ListView.separated(
                 padding: const EdgeInsets.symmetric(horizontal: 20),
                 scrollDirection: Axis.horizontal,
-                itemCount: filteredCategories.length,
+                itemCount: serviceCategories.length,
                 separatorBuilder: (_, __) => const SizedBox(width: 14),
                 itemBuilder: (context, index) {
-                  final cat = filteredCategories[index];
+                  final cat = serviceCategories[index];
                   return CategoryCard(
                     category: cat,
                     index: index,
                     onTap: () {
+                      setState(() {
+                        _selectedCategory = (_selectedCategory == cat.name) ? 'All' : cat.name;
+                      });
                       _showQuickBookDialog(cat.name, cat.averagePrice);
                     },
                   );
@@ -1108,6 +1141,93 @@ class _UserMainNavigationScreenState extends State<UserMainNavigationScreen> {
           style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
         ),
         trailing: trailing ?? const Icon(Icons.arrow_forward_ios_rounded, size: 14),
+      ),
+    );
+  }
+
+  void _showAllCategoriesModal() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => Container(
+        height: MediaQuery.of(ctx).size.height * 0.85,
+        decoration: BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(AppRadius.xl)),
+        ),
+        child: Column(
+          children: [
+            Center(
+              child: Container(
+                margin: const EdgeInsets.only(top: 12, bottom: 8),
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: AppColors.border,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'All Categories',
+                        style: ctx.type.titleLarge?.copyWith(
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: -0.3,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        '${serviceCategories.length} categories available',
+                        style: TextStyle(
+                          color: AppColors.textMuted,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close_rounded),
+                    onPressed: () => Navigator.pop(ctx),
+                  ),
+                ],
+              ),
+            ),
+            Expanded(
+              child: GridView.builder(
+                padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
+                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 2,
+                  childAspectRatio: 0.88,
+                  crossAxisSpacing: 14,
+                  mainAxisSpacing: 14,
+                ),
+                itemCount: serviceCategories.length,
+                itemBuilder: (ctx, index) {
+                  final cat = serviceCategories[index];
+                  return CategoryCard(
+                    category: cat,
+                    index: index,
+                    onTap: () {
+                      Navigator.pop(ctx);
+                      setState(() => _selectedCategory = cat.name);
+                      _showQuickBookDialog(cat.name, cat.averagePrice);
+                    },
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

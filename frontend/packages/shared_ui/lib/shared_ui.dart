@@ -414,6 +414,71 @@ class PremiumImage extends StatelessWidget {
   final double radius;
   final Widget? overlay;
 
+  Widget _buildImage(BuildContext context) {
+    if (url.isEmpty) {
+      return Container(
+        decoration: BoxDecoration(gradient: AppColors.cardGradient),
+        child: Center(
+          child: Icon(Icons.image_rounded, color: AppColors.textMuted, size: 42),
+        ),
+      );
+    }
+
+    if (url.startsWith('http://') || url.startsWith('https://')) {
+      return Image.network(
+        url,
+        fit: fit,
+        loadingBuilder: (context, child, progress) {
+          if (progress == null) return child;
+          return const SkeletonBox(height: double.infinity);
+        },
+        errorBuilder: (context, error, stackTrace) => Container(
+          decoration: BoxDecoration(gradient: AppColors.cardGradient),
+          child: Center(
+            child: Icon(Icons.image_rounded, color: AppColors.textMuted, size: 42),
+          ),
+        ),
+      );
+    }
+
+    if (url.startsWith('data:image/')) {
+      try {
+        final commaIdx = url.indexOf(',');
+        final base64Str = commaIdx != -1 ? url.substring(commaIdx + 1) : url;
+        final bytes = base64Decode(base64Str);
+        return Image.memory(
+          bytes,
+          fit: fit,
+          errorBuilder: (context, error, stackTrace) => Container(
+            decoration: BoxDecoration(gradient: AppColors.cardGradient),
+            child: Center(
+              child: Icon(Icons.image_rounded, color: AppColors.textMuted, size: 42),
+            ),
+          ),
+        );
+      } catch (_) {}
+    }
+
+    // Local asset path (normalize if given public/images/ or filename)
+    String assetPath = url;
+    if (assetPath.startsWith('public/images/')) {
+      assetPath = 'assets/images/${assetPath.substring('public/images/'.length)}';
+    } else if (!assetPath.startsWith('assets/')) {
+      assetPath = 'assets/images/$assetPath';
+    }
+
+    return Image.asset(
+      assetPath,
+      fit: fit,
+      errorBuilder: (context, error, stackTrace) => Container(
+        decoration: BoxDecoration(gradient: AppColors.cardGradient),
+        child: Center(
+          child: Icon(Icons.image_rounded, color: AppColors.textMuted, size: 42),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return ClipRRect(
@@ -424,20 +489,7 @@ class PremiumImage extends StatelessWidget {
         child: Stack(
           fit: StackFit.expand,
           children: [
-            Image.network(
-              url,
-              fit: fit,
-              loadingBuilder: (context, child, progress) {
-                if (progress == null) return child;
-                return const SkeletonBox(height: double.infinity);
-              },
-              errorBuilder: (context, error, stackTrace) => Container(
-                decoration: BoxDecoration(gradient: AppColors.cardGradient),
-                child: Center(
-                  child: Icon(Icons.image_rounded, color: AppColors.textMuted, size: 42),
-                ),
-              ),
-            ),
+            _buildImage(context),
             DecoratedBox(
               decoration: BoxDecoration(
                 gradient: LinearGradient(
@@ -445,8 +497,8 @@ class PremiumImage extends StatelessWidget {
                   end: Alignment.bottomCenter,
                   colors: [
                     Colors.transparent,
-                    Colors.black.withOpacity(0.20),
-                    Colors.black.withOpacity(0.75),
+                    Colors.black.withValues(alpha: 0.20),
+                    Colors.black.withValues(alpha: 0.75),
                   ],
                 ),
               ),
