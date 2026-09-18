@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:shared_theme/shared_theme.dart';
@@ -282,15 +283,27 @@ class _TaskerAuthScreenState extends State<TaskerAuthScreen> {
     'Errands',
   ];
 
+  StreamSubscription<AuthState>? _authSubscription;
+  bool _authHandled = false;
+
   @override
   void initState() {
     super.initState();
     _rememberMe = false;
     _agreeDataProcessing = false;
+    _authSubscription = Supabase.instance.client.auth.onAuthStateChange.listen((data) {
+      final AuthChangeEvent event = data.event;
+      final Session? session = data.session;
+      if (!_authHandled && (event == AuthChangeEvent.signedIn || event == AuthChangeEvent.tokenRefreshed) && session != null) {
+        _authHandled = true;
+        _onGoogleTaskerAuthenticated(session.user, session);
+      }
+    });
   }
 
   @override
   void dispose() {
+    _authSubscription?.cancel();
     _loginEmailController.dispose();
     _loginPasswordController.dispose();
     _signupNameController.dispose();
@@ -466,6 +479,55 @@ class _TaskerAuthScreenState extends State<TaskerAuthScreen> {
     }
   }
 
+  Future<void> _onGoogleTaskerAuthenticated(User user, Session session) async {
+    final email = user.email ?? '';
+    final fullName = (user.userMetadata?['full_name'] as String?) ??
+        (user.userMetadata?['name'] as String?) ??
+        (email.contains('@') ? email.split('@').first : 'Pro Tasker');
+    final avatar = _getInitials(fullName);
+
+    final googleTasker = TaskerProfile(
+      name: fullName,
+      avatar: avatar,
+      skill: '$_selectedCategory Specialist',
+      rating: 0.0,
+      distance: '0 km',
+      matchScore: 0,
+      completionRate: 0,
+      reviews: 0,
+      verified: false,
+    );
+
+    // Sync with backend PostgreSQL database as tasker
+    try {
+      await ApiService.googleSignIn(
+        email: email,
+        name: fullName,
+        photoUrl: user.userMetadata?['avatar_url'] as String?,
+        idToken: session.accessToken,
+      );
+    } catch (_) {}
+
+    if (!mounted) return;
+    setState(() => _isGoogleLoading = false);
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            const Icon(Icons.check_circle_rounded, color: Colors.white),
+            const SizedBox(width: 12),
+            Expanded(child: Text('Signed in as Pro Tasker: $fullName')),
+          ],
+        ),
+        backgroundColor: const Color(0xFF00B37E),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+
+    widget.onAuthenticated(googleTasker);
+  }
+
   Future<void> _handleGoogleSignIn() async {
     setState(() {
       _isGoogleLoading = true;
@@ -482,67 +544,24 @@ class _TaskerAuthScreenState extends State<TaskerAuthScreen> {
         redirectTo: redirectUrl,
       );
 
-      final user = Supabase.instance.client.auth.currentUser;
-      if (user != null) {
-        final email = user.email ?? '';
-        final fullName = (user.userMetadata?['full_name'] as String?) ??
-            (user.userMetadata?['name'] as String?) ??
-            (email.contains('@') ? email.split('@').first : 'Pro Tasker');
-        final avatar = _getInitials(fullName);
-
-        final googleTasker = TaskerProfile(
-          name: fullName,
-          avatar: avatar,
-          skill: '$_selectedCategory Specialist',
-          rating: 0.0,
-          distance: '0 km',
-          matchScore: 0,
-          completionRate: 0,
-          reviews: 0,
-          verified: false,
-        );
-
-        // Sync with backend PostgreSQL database as tasker
-        try {
-          await ApiService.googleSignIn(
-            email: email,
-            name: fullName,
-            photoUrl: user.userMetadata?['avatar_url'] as String?,
-            idToken: Supabase.instance.client.auth.currentSession?.accessToken,
-          );
-        } catch (_) {}
-
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Row(
-              children: [
-                const Icon(Icons.check_circle_rounded, color: Colors.white),
-                const SizedBox(width: 12),
-                Expanded(child: Text('Signed in as Pro Tasker: $fullName')),
-              ],
-            ),
-            backgroundColor: const Color(0xFF00B37E),
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-
-        widget.onAuthenticated(googleTasker);
+      // Check if session became available immediately
+      final session = Supabase.instance.client.auth.currentSession;
+      if (session != null && !_authHandled) {
+        _authHandled = true;
+        await _onGoogleTaskerAuthenticated(session.user, session);
       }
     } on AuthException catch (e) {
       if (!mounted) return;
       setState(() {
         _errorMessage = 'Supabase Google Sign-In error: ${e.message}';
+        _isGoogleLoading = false;
       });
     } catch (e) {
       if (!mounted) return;
       setState(() {
         _errorMessage = 'Google Sign-In failed: $e';
+        _isGoogleLoading = false;
       });
-    } finally {
-      if (mounted) {
-        setState(() => _isGoogleLoading = false);
-      }
     }
   }
 

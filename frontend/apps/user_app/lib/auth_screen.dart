@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:shared_theme/shared_theme.dart';
@@ -270,15 +271,27 @@ class _UserAuthScreenState extends State<UserAuthScreen> {
   String? _errorMessage;
   String? _successMessage;
 
+  StreamSubscription<AuthState>? _authSubscription;
+  bool _authHandled = false;
+
   @override
   void initState() {
     super.initState();
     _rememberMe = false;
     _agreeDataProcessing = false;
+    _authSubscription = Supabase.instance.client.auth.onAuthStateChange.listen((data) {
+      final AuthChangeEvent event = data.event;
+      final Session? session = data.session;
+      if (!_authHandled && (event == AuthChangeEvent.signedIn || event == AuthChangeEvent.tokenRefreshed) && session != null) {
+        _authHandled = true;
+        _onGoogleUserAuthenticated(session.user, session);
+      }
+    });
   }
 
   @override
   void dispose() {
+    _authSubscription?.cancel();
     _loginEmailController.dispose();
     _loginPasswordController.dispose();
     _signupNameController.dispose();
@@ -451,6 +464,55 @@ class _UserAuthScreenState extends State<UserAuthScreen> {
     }
   }
 
+  Future<void> _onGoogleUserAuthenticated(User user, Session session) async {
+    final email = user.email ?? '';
+    final fullName = (user.userMetadata?['full_name'] as String?) ??
+        (user.userMetadata?['name'] as String?) ??
+        (email.contains('@') ? email.split('@').first : 'Customer');
+    final initials = _getInitials(fullName);
+
+    final googleUser = TasklyUser(
+      name: fullName,
+      email: email,
+      password: '',
+      initials: initials,
+      location: 'Nairobi, Kenya',
+      rating: 0.0,
+      tasksCount: 0,
+      savedCount: 0,
+      isVerified: false,
+    );
+
+    // Sync with backend PostgreSQL database as recruiter
+    try {
+      await ApiService.googleSignIn(
+        email: email,
+        name: fullName,
+        photoUrl: user.userMetadata?['avatar_url'] as String?,
+        idToken: session.accessToken,
+      );
+    } catch (_) {}
+
+    if (!mounted) return;
+    setState(() => _isGoogleLoading = false);
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            const Icon(Icons.check_circle_rounded, color: Colors.white),
+            const SizedBox(width: 12),
+            Expanded(child: Text('Signed in with Google as $email')),
+          ],
+        ),
+        backgroundColor: const Color(0xFF00B37E),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+
+    widget.onAuthenticated(googleUser);
+  }
+
   Future<void> _handleGoogleSignIn() async {
     setState(() {
       _isGoogleLoading = true;
@@ -467,67 +529,24 @@ class _UserAuthScreenState extends State<UserAuthScreen> {
         redirectTo: redirectUrl,
       );
 
-      final user = Supabase.instance.client.auth.currentUser;
-      if (user != null) {
-        final email = user.email ?? '';
-        final fullName = (user.userMetadata?['full_name'] as String?) ??
-            (user.userMetadata?['name'] as String?) ??
-            (email.contains('@') ? email.split('@').first : 'User');
-        final initials = _getInitials(fullName);
-
-        final googleUser = TasklyUser(
-          name: fullName,
-          email: email,
-          password: '',
-          initials: initials,
-          location: 'Nairobi, Kenya',
-          rating: 0.0,
-          tasksCount: 0,
-          savedCount: 0,
-          isVerified: false,
-        );
-
-        // Sync with backend PostgreSQL database as recruiter
-        try {
-          await ApiService.googleSignIn(
-            email: email,
-            name: fullName,
-            photoUrl: user.userMetadata?['avatar_url'] as String?,
-            idToken: Supabase.instance.client.auth.currentSession?.accessToken,
-          );
-        } catch (_) {}
-
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Row(
-              children: [
-                const Icon(Icons.check_circle_rounded, color: Colors.white),
-                const SizedBox(width: 12),
-                Expanded(child: Text('Signed in with Google as $email')),
-              ],
-            ),
-            backgroundColor: const Color(0xFF00B37E),
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-
-        widget.onAuthenticated(googleUser);
+      // Check if session became available immediately
+      final session = Supabase.instance.client.auth.currentSession;
+      if (session != null && !_authHandled) {
+        _authHandled = true;
+        await _onGoogleUserAuthenticated(session.user, session);
       }
     } on AuthException catch (e) {
       if (!mounted) return;
       setState(() {
         _errorMessage = 'Supabase Google Sign-In error: ${e.message}';
+        _isGoogleLoading = false;
       });
     } catch (e) {
       if (!mounted) return;
       setState(() {
         _errorMessage = 'Google Sign-In failed: $e';
+        _isGoogleLoading = false;
       });
-    } finally {
-      if (mounted) {
-        setState(() => _isGoogleLoading = false);
-      }
     }
   }
 
