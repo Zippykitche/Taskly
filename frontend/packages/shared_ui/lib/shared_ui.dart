@@ -27,16 +27,20 @@ class AppCards {
 }
 
 class TasklyLogo extends StatelessWidget {
-  const TasklyLogo({super.key, this.size = 44});
+  const TasklyLogo({super.key, this.size = 44, this.color});
 
   final double size;
+  final Color? color;
 
   @override
   Widget build(BuildContext context) {
+    final effectiveColor = color ?? (AppColors.isDarkMode ? Colors.white : null);
     return Image.asset(
       'assets/images/tasklylogo.png',
       height: size,
       fit: BoxFit.contain,
+      color: effectiveColor,
+      colorBlendMode: effectiveColor != null ? BlendMode.srcIn : null,
       errorBuilder: (context, error, stackTrace) {
         return Container(
           width: size,
