@@ -200,7 +200,6 @@ class TaskerMainNavigationScreen extends StatefulWidget {
 
 class _TaskerMainNavigationScreenState extends State<TaskerMainNavigationScreen> {
   int _currentIndex = 0;
-  bool _isOnline = true;
   late TaskerProfile _currentTasker;
 
   // Available jobs state
@@ -344,93 +343,34 @@ class _TaskerMainNavigationScreenState extends State<TaskerMainNavigationScreen>
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Top Header
+                  // App bar header (Logo & Profile Picture like customer page)
                   Row(
                     children: [
                       const TasklyLogo(size: 40),
-                      const SizedBox(width: 12),
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              Text(
-                                'TASKLY',
-                                style: TextStyle(
-                                  fontWeight: FontWeight.w900,
-                                  fontSize: 18,
-                                  letterSpacing: 1.2,
-                                  color: AppColors.primary,
-                                ),
-                              ),
-                              const SizedBox(width: 6),
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                decoration: BoxDecoration(
-                                  color: const Color(0xFF6366F1).withValues(alpha: 0.2),
-                                  borderRadius: BorderRadius.circular(6),
-                                ),
-                                child: const Text(
-                                  'PRO TASKER',
-                                  style: TextStyle(
-                                    fontSize: 10,
-                                    fontWeight: FontWeight.w800,
-                                    color: Color(0xFF6366F1),
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                          Row(
-                            children: [
-                              Container(
-                                width: 8,
-                                height: 8,
-                                decoration: BoxDecoration(
-                                  color: _isOnline ? AppColors.primary : AppColors.textMuted,
-                                  shape: BoxShape.circle,
-                                ),
-                              ),
-                              const SizedBox(width: 6),
-                              Text(
-                                _isOnline ? 'Online • Ready for jobs' : 'Offline • Paused',
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w600,
-                                  color: _isOnline ? AppColors.primary : AppColors.textMuted,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
                       const Spacer(),
-                      // Online / Offline Switch
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                        decoration: AppCards.surface(radius: AppRadius.pill),
-                        child: Row(
-                          children: [
-                            Text(
-                              _isOnline ? 'GO OFFLINE' : 'GO ONLINE',
-                              style: TextStyle(
-                                fontSize: 10,
-                                fontWeight: FontWeight.w900,
-                                color: _isOnline ? AppColors.danger : AppColors.primary,
-                              ),
-                            ),
-                            const SizedBox(width: 4),
-                            Switch(
-                              value: _isOnline,
-                              activeThumbColor: AppColors.primary,
-                              onChanged: (val) => setState(() => _isOnline = val),
-                            ),
-                          ],
+                      IconButton(
+                        onPressed: () {
+                          AppTheme.themeModeNotifier.value =
+                              AppColors.isDarkMode ? ThemeMode.light : ThemeMode.dark;
+                        },
+                        icon: Icon(
+                          AppColors.isDarkMode ? Icons.light_mode_rounded : Icons.dark_mode_rounded,
+                          color: AppColors.textPrimary,
+                        ),
+                      ),
+                      const SizedBox(width: 4),
+                      GestureDetector(
+                        onTap: () => setState(() => _currentIndex = 4),
+                        child: TasklyAvatar(
+                          initials: _currentTasker.avatar,
+                          imageUrl: _currentTasker.profilePictureUrl,
+                          size: 38,
+                          verified: _currentTasker.verified,
                         ),
                       ),
                     ],
                   ),
-                  const SizedBox(height: 20),
+                  const SizedBox(height: 18),
 
                   // Today Summary Card
                   Container(
@@ -498,11 +438,6 @@ class _TaskerMainNavigationScreenState extends State<TaskerMainNavigationScreen>
                           letterSpacing: -0.3,
                         ),
                       ),
-                      if (!_isOnline)
-                        const Text(
-                          'Offline Mode Active',
-                          style: TextStyle(color: Colors.orange, fontSize: 12, fontWeight: FontWeight.w700),
-                        ),
                     ],
                   ),
                 ],
@@ -513,6 +448,7 @@ class _TaskerMainNavigationScreenState extends State<TaskerMainNavigationScreen>
           // Jobs Feed List
           if (_jobsFeed.isEmpty)
             const SliverFillRemaining(
+              hasScrollBody: false,
               child: EmptyState(
                 icon: Icons.check_circle_outline_rounded,
                 title: 'All caught up!',

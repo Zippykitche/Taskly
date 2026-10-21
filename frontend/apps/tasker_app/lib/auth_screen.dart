@@ -260,7 +260,9 @@ class _TaskerAuthScreenState extends State<TaskerAuthScreen> {
   final _signupPhoneController = TextEditingController();
   final _signupPasswordController = TextEditingController();
   final _signupConfirmPasswordController = TextEditingController();
-  String _selectedCategory = 'Cleaning';
+  final _customSkillController = TextEditingController();
+  final _customSkillFocusNode = FocusNode();
+  final List<String> _selectedCategories = ['Cleaning'];
   String _selectedCounty = 'Nairobi';
   String _selectedLocation = 'Westlands';
   bool _signupObscurePassword = true;
@@ -311,6 +313,8 @@ class _TaskerAuthScreenState extends State<TaskerAuthScreen> {
     _signupPhoneController.dispose();
     _signupPasswordController.dispose();
     _signupConfirmPasswordController.dispose();
+    _customSkillController.dispose();
+    _customSkillFocusNode.dispose();
     super.dispose();
   }
 
@@ -345,10 +349,13 @@ class _TaskerAuthScreenState extends State<TaskerAuthScreen> {
         final defaultName = email.contains('@')
             ? email.split('@').first
             : 'Pro Tasker';
+        final skillTitle = _selectedCategories.isNotEmpty
+            ? '${_selectedCategories.join(', ')} Specialist'
+            : 'General Specialist';
         final profile = TaskerProfile(
           name: defaultName,
           avatar: _getInitials(defaultName),
-          skill: '$_selectedCategory Specialist',
+          skill: skillTitle,
           rating: 0.0,
           distance: '0 km',
           matchScore: 0,
@@ -375,6 +382,43 @@ class _TaskerAuthScreenState extends State<TaskerAuthScreen> {
     }
   }
 
+  void _addServiceFromText(String rawText) {
+    final text = rawText.trim();
+    if (text.isEmpty) return;
+
+    final parts = text.split(RegExp(r'[,;]+')).map((s) => s.trim()).where((s) => s.isNotEmpty);
+    setState(() {
+      for (final part in parts) {
+        final formatted = part.length > 1
+            ? '${part[0].toUpperCase()}${part.substring(1)}'
+            : part.toUpperCase();
+        if (!_selectedCategories.any((cat) => cat.toLowerCase() == formatted.toLowerCase())) {
+          _selectedCategories.add(formatted);
+        }
+      }
+      _customSkillController.clear();
+      _errorMessage = null;
+    });
+  }
+
+  void _removeService(String service) {
+    setState(() {
+      _selectedCategories.remove(service);
+    });
+  }
+
+  void _togglePresetService(String service) {
+    setState(() {
+      final index = _selectedCategories.indexWhere((c) => c.toLowerCase() == service.toLowerCase());
+      if (index >= 0) {
+        _selectedCategories.removeAt(index);
+      } else {
+        _selectedCategories.add(service);
+      }
+      _errorMessage = null;
+    });
+  }
+
   Future<void> _handleSignup() async {
     if (!_signupFormKey.currentState!.validate()) {
       final email = _signupEmailController.text.trim();
@@ -391,6 +435,18 @@ class _TaskerAuthScreenState extends State<TaskerAuthScreen> {
     if (!_agreeDataProcessing) {
       setState(() {
         _errorMessage = 'Please agree to the processing of personal data to proceed.';
+      });
+      return;
+    }
+
+    final pendingSkill = _customSkillController.text.trim();
+    if (pendingSkill.isNotEmpty) {
+      _addServiceFromText(pendingSkill);
+    }
+
+    if (_selectedCategories.isEmpty) {
+      setState(() {
+        _errorMessage = 'Please add or select at least one service you provide under Primary Skill Specialty.';
       });
       return;
     }
@@ -423,7 +479,7 @@ class _TaskerAuthScreenState extends State<TaskerAuthScreen> {
         phone: phone,
         password: password,
         idNumber: '12345678',
-        categories: [_selectedCategory],
+        categories: _selectedCategories,
         city: _selectedCounty,
         area: _selectedLocation,
       );
@@ -485,11 +541,14 @@ class _TaskerAuthScreenState extends State<TaskerAuthScreen> {
         (user.userMetadata?['name'] as String?) ??
         (email.contains('@') ? email.split('@').first : 'Pro Tasker');
     final avatar = _getInitials(fullName);
+    final skillTitle = _selectedCategories.isNotEmpty
+        ? '${_selectedCategories.join(', ')} Specialist'
+        : 'General Specialist';
 
     final googleTasker = TaskerProfile(
       name: fullName,
       avatar: avatar,
-      skill: '$_selectedCategory Specialist',
+      skill: skillTitle,
       rating: 0.0,
       distance: '0 km',
       matchScore: 0,
@@ -1606,49 +1665,305 @@ class _TaskerAuthScreenState extends State<TaskerAuthScreen> {
       children: [
         Container(
           margin: const EdgeInsets.only(top: 8),
-          child: DropdownButtonFormField<String>(
-            initialValue: _selectedCategory,
-            dropdownColor: isDark ? const Color(0xFF1A2420) : Colors.white,
-            style: TextStyle(
-              fontSize: 14.5,
-              fontWeight: FontWeight.w600,
-              color: isDark ? Colors.white : const Color(0xFF0F172A),
+          padding: const EdgeInsets.fromLTRB(14, 20, 14, 14),
+          decoration: BoxDecoration(
+            color: isDark ? const Color(0xFF1B231F) : const Color(0xFFF8FAFC),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: isDark ? const Color(0xFF2B3A33) : const Color(0xFFE2E8F0),
+              width: 1.2,
             ),
-            decoration: InputDecoration(
-              contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
-              filled: true,
-              fillColor: isDark ? const Color(0xFF1B231F) : const Color(0xFFF8FAFC),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(16),
-                borderSide: BorderSide(
-                  color: isDark ? const Color(0xFF2B3A33) : const Color(0xFFE2E8F0),
-                  width: 1.2,
-                ),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Dynamic service entry input field
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: _customSkillController,
+                      focusNode: _customSkillFocusNode,
+                      textCapitalization: TextCapitalization.words,
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        color: isDark ? Colors.white : const Color(0xFF0F172A),
+                      ),
+                      decoration: InputDecoration(
+                        isDense: true,
+                        hintText: 'Type service (e.g. cleaner) & add...',
+                        hintStyle: TextStyle(
+                          fontSize: 13,
+                          color: isDark ? Colors.white38 : const Color(0xFF94A3B8),
+                        ),
+                        prefixIcon: const Icon(
+                          Icons.handyman_outlined,
+                          size: 19,
+                          color: Color(0xFF00B37E),
+                        ),
+                        suffixIcon: _customSkillController.text.isNotEmpty
+                            ? IconButton(
+                                icon: const Icon(Icons.close_rounded, size: 16),
+                                onPressed: () {
+                                  setState(() {
+                                    _customSkillController.clear();
+                                  });
+                                },
+                              )
+                            : null,
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+                        filled: true,
+                        fillColor: isDark ? const Color(0xFF131A17) : Colors.white,
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide(
+                            color: isDark ? const Color(0xFF2B3A33) : const Color(0xFFCBD5E1),
+                            width: 1.2,
+                          ),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide(
+                            color: isDark ? const Color(0xFF2B3A33) : const Color(0xFFCBD5E1),
+                            width: 1.2,
+                          ),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: const BorderSide(
+                            color: Color(0xFF00B37E),
+                            width: 1.8,
+                          ),
+                        ),
+                      ),
+                      onChanged: (val) => setState(() {}),
+                      onSubmitted: (val) {
+                        _addServiceFromText(val);
+                        _customSkillFocusNode.requestFocus();
+                      },
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  SizedBox(
+                    height: 42,
+                    child: ElevatedButton.icon(
+                      onPressed: () {
+                        _addServiceFromText(_customSkillController.text);
+                        _customSkillFocusNode.requestFocus();
+                      },
+                      icon: const Icon(Icons.add_rounded, size: 18),
+                      label: const Text(
+                        'Add',
+                        style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
+                      ),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF00B37E),
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(horizontal: 14),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        elevation: 0,
+                      ),
+                    ),
+                  ),
+                ],
               ),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(16),
-                borderSide: BorderSide(
-                  color: isDark ? const Color(0xFF2B3A33) : const Color(0xFFE2E8F0),
-                  width: 1.2,
+
+              // Selected services chips
+              if (_selectedCategories.isNotEmpty) ...[
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    const Icon(
+                      Icons.check_circle_rounded,
+                      size: 14,
+                      color: Color(0xFF00B37E),
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      'Added Services (${_selectedCategories.length}):',
+                      style: TextStyle(
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.w700,
+                        color: isDark ? const Color(0xFF4ADE80) : const Color(0xFF047857),
+                      ),
+                    ),
+                  ],
                 ),
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(16),
-                borderSide: const BorderSide(
-                  color: Color(0xFF00B37E),
-                  width: 1.8,
+                const SizedBox(height: 6),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: _selectedCategories.map((service) {
+                    return Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF00B37E).withValues(alpha: isDark ? 0.22 : 0.12),
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(
+                          color: const Color(0xFF00B37E).withValues(alpha: 0.6),
+                          width: 1.2,
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            service,
+                            style: TextStyle(
+                              fontSize: 12.5,
+                              fontWeight: FontWeight.w700,
+                              color: isDark ? const Color(0xFF4ADE80) : const Color(0xFF065F46),
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                          GestureDetector(
+                            onTap: () => _removeService(service),
+                            child: Icon(
+                              Icons.close_rounded,
+                              size: 15,
+                              color: isDark ? Colors.white70 : const Color(0xFF64748B),
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  }).toList(),
                 ),
+              ],
+
+              // Popular suggestions & Other option
+              const SizedBox(height: 12),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'Suggestions / Or Choose Other:',
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      color: isDark ? Colors.white60 : const Color(0xFF64748B),
+                    ),
+                  ),
+                  if (_selectedCategories.isNotEmpty)
+                    GestureDetector(
+                      onTap: () => setState(() => _selectedCategories.clear()),
+                      child: Text(
+                        'Clear all',
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                          color: isDark ? Colors.redAccent.shade100 : Colors.redAccent.shade700,
+                        ),
+                      ),
+                    ),
+                ],
               ),
-            ),
-            items: _skillCategories.map((cat) {
-              return DropdownMenuItem(
-                value: cat,
-                child: Text('$cat Service Specialist'),
-              );
-            }).toList(),
-            onChanged: (val) {
-              if (val != null) setState(() => _selectedCategory = val);
-            },
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 6,
+                runSpacing: 6,
+                children: [
+                  ..._skillCategories.map((cat) {
+                    final isSelected = _selectedCategories
+                        .any((c) => c.toLowerCase() == cat.toLowerCase());
+                    return InkWell(
+                      onTap: () => _togglePresetService(cat),
+                      borderRadius: BorderRadius.circular(16),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                        decoration: BoxDecoration(
+                          color: isSelected
+                              ? const Color(0xFF00B37E).withValues(alpha: isDark ? 0.25 : 0.15)
+                              : (isDark ? const Color(0xFF131A17) : Colors.white),
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(
+                            color: isSelected
+                                ? const Color(0xFF00B37E)
+                                : (isDark ? const Color(0xFF2B3A33) : const Color(0xFFCBD5E1)),
+                            width: 1,
+                          ),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            if (isSelected) ...[
+                              const Icon(
+                                Icons.check_rounded,
+                                size: 13,
+                                color: Color(0xFF00B37E),
+                              ),
+                              const SizedBox(width: 4),
+                            ],
+                            Text(
+                              cat,
+                              style: TextStyle(
+                                fontSize: 11.5,
+                                fontWeight: isSelected ? FontWeight.w700 : FontWeight.w600,
+                                color: isSelected
+                                    ? const Color(0xFF00B37E)
+                                    : (isDark ? Colors.white70 : const Color(0xFF475569)),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  }),
+
+                  // "Other" option chip
+                  InkWell(
+                    onTap: () {
+                      _customSkillFocusNode.requestFocus();
+                      ScaffoldMessenger.of(context).removeCurrentSnackBar();
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text(
+                            'State the service you provide in the box above and tap "Add"',
+                          ),
+                          duration: Duration(seconds: 2),
+                          behavior: SnackBarBehavior.floating,
+                        ),
+                      );
+                    },
+                    borderRadius: BorderRadius.circular(16),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                      decoration: BoxDecoration(
+                        color: isDark ? const Color(0xFF131A17) : Colors.white,
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(
+                          color: const Color(0xFF00B37E),
+                          width: 1.2,
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(
+                            Icons.edit_note_rounded,
+                            size: 15,
+                            color: Color(0xFF00B37E),
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            'Other (State Service)',
+                            style: TextStyle(
+                              fontSize: 11.5,
+                              fontWeight: FontWeight.w700,
+                              color: isDark ? const Color(0xFF4ADE80) : const Color(0xFF00B37E),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
           ),
         ),
 

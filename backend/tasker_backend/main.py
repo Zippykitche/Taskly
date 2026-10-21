@@ -138,7 +138,7 @@ async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = De
         
         user = db.query(User).filter(
             or_(User.phone_number == phone, User.email == phone),
-            User.user_type == 'tasker'
+            User.user_type.in_(['tasker', 'both'])
         ).first()
         if not user:
             raise HTTPException(status_code=401, detail="User not found")
@@ -175,18 +175,58 @@ async def register(user_data: UserRegister, background_tasks: BackgroundTasks, d
             raise HTTPException(status_code=400, detail=message)
         
         existing = db.query(User).filter(User.phone_number == user_data.phone_number).first()
-        if existing:
-            AuditLogger.log_event(
-                event_type="REGISTER",
-                user_email=user_data.email,
-                status="FAILED",
-                details={"reason": "User already exists"}
-            )
-            raise HTTPException(status_code=400, detail="User already exists")
-            
         existing_email = db.query(User).filter(User.email == user_data.email.lower()).first()
-        if existing_email:
-            raise HTTPException(status_code=400, detail="User with this email already exists")
+
+        existing_user = existing or existing_email
+        if existing_user:
+            if existing_user.user_type in ["tasker", "both"]:
+                AuditLogger.log_event(
+                    event_type="REGISTER",
+                    user_email=user_data.email,
+                    status="FAILED",
+                    details={"reason": "User already registered as tasker"}
+                )
+                raise HTTPException(status_code=400, detail="A tasker account with this email or phone already exists. Please log in.")
+
+            # Upgrade existing customer account to also have tasker capabilities
+            existing_user.user_type = "both"
+            existing_user.categories = user_data.categories
+            if user_data.id_number:
+                existing_user.id_number = user_data.id_number
+            if user_data.location_city:
+                existing_user.location_city = user_data.location_city
+            if user_data.location_area:
+                existing_user.location_area = user_data.location_area
+            if user_data.password:
+                existing_user.password = PasswordSecurity.hash_password(user_data.password)
+
+            # Ensure wallet exists
+            wallet = db.query(Wallet).filter(Wallet.user_id == existing_user.id).first()
+            if not wallet:
+                wallet = Wallet(user_id=existing_user.id)
+                db.add(wallet)
+
+            db.commit()
+            db.refresh(existing_user)
+
+            if email_service:
+                background_tasks.add_task(
+                    email_service.send_registration_email,
+                    existing_user.email,
+                    existing_user.full_name,
+                    "tasker"
+                )
+
+            AuditLogger.log_event(
+                event_type="REGISTER_TASKER_FROM_CUSTOMER",
+                user_id=existing_user.id,
+                user_email=existing_user.email,
+                status="SUCCESS"
+            )
+            return {
+                "message": "Pro Tasker profile created successfully for your account! Please sign in to continue.",
+                "user_id": existing_user.id
+            }
 
         new_user = User(
             phone_number=user_data.phone_number,
@@ -289,7 +329,7 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = 
     try:
         user = db.query(User).filter(
             or_(User.phone_number == form_data.username, User.email == form_data.username),
-            User.user_type == 'tasker'
+            User.user_type.in_(['tasker', 'both'])
         ).first()
 
         if not user:
@@ -364,8 +404,7 @@ async def google_auth(
             display_name = clean_email.split("@")[0].replace(".", " ").title()
 
         user = db.query(User).filter(
-            User.email == clean_email,
-            User.user_type == "tasker"
+            User.email == clean_email
         ).first()
 
         is_new_user = False
@@ -410,10 +449,12 @@ async def google_auth(
                 status="SUCCESS"
             )
         else:
+            if user.user_type == "recruiter":
+                user.user_type = "both"
             if auth_data.photo_url and not user.profile_picture_url:
                 user.profile_picture_url = auth_data.photo_url
-                db.commit()
-                db.refresh(user)
+            db.commit()
+            db.refresh(user)
 
             AuditLogger.log_event(
                 event_type="LOGIN_GOOGLE",

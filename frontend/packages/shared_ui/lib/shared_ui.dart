@@ -842,27 +842,30 @@ class EmptyState extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Center(
-      child: Padding(
-        padding: AppSpacing.page,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const TasklyLogo(size: 58),
-            const SizedBox(height: AppSpacing.lg),
-            Icon(icon, size: 40, color: AppColors.primary),
-            const SizedBox(height: AppSpacing.md),
-            Text(
-              title,
-              style: context.type.titleLarge,
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: AppSpacing.xs),
-            Text(
-              message,
-              textAlign: TextAlign.center,
-              style: TextStyle(color: AppColors.textSecondary),
-            ),
-          ],
+      child: SingleChildScrollView(
+        physics: const BouncingScrollPhysics(),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const TasklyLogo(size: 46),
+              const SizedBox(height: AppSpacing.sm),
+              Icon(icon, size: 34, color: AppColors.primary),
+              const SizedBox(height: AppSpacing.xs),
+              Text(
+                title,
+                style: context.type.titleLarge,
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 4),
+              Text(
+                message,
+                textAlign: TextAlign.center,
+                style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
+              ),
+            ],
+          ),
         ),
       ),
     );
