@@ -1,0 +1,9 @@
+name: ai_mock
+description: Mock AI concierge responses for Taskly AI.
+publish_to: none
+version: 0.1.0
+environment:
+  sdk: ">=3.3.0 <4.0.0"
+dependencies:
+  shared_models:
+    path: ../shared_models

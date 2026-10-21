@@ -1,0 +1,12 @@
+# melos_managed_dependency_overrides: ai_mock,shared_components,shared_models,shared_theme,shared_ui
+dependency_overrides:
+  ai_mock:
+    path: ../../packages/ai_mock
+  shared_components:
+    path: ../../packages/shared_components
+  shared_models:
+    path: ../../packages/shared_models
+  shared_theme:
+    path: ../../packages/shared_theme
+  shared_ui:
+    path: ../../packages/shared_ui

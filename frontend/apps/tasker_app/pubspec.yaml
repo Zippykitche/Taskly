@@ -1,0 +1,41 @@
+name: tasker_app
+description: Taskly Tasker App - For Workers
+publish_to: 'none'
+
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  shared_theme: ^0.1.0
+  shared_models: ^0.1.0
+  shared_ui: ^0.1.0
+  shared_components: ^0.1.0
+  ai_mock: ^0.1.0
+  cupertino_icons: ^1.0.2
+  google_fonts: ^6.2.0
+  flutter_svg: ^2.0.10
+  provider: ^6.1.0
+  http: ^1.1.0
+  dio: ^5.4.0
+  shared_preferences: ^2.2.2
+  intl: ^0.19.0
+  uuid: ^4.0.0
+  logger: ^2.0.0
+  equatable: ^2.0.5
+  cached_network_image: ^3.3.1
+  email_validator: ^2.1.17
+  supabase_flutter: ^2.8.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^3.0.0
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/images/

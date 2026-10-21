@@ -1,0 +1,6 @@
+name: shared_models
+description: Shared Taskly AI frontend models and mock data.
+publish_to: none
+version: 0.1.0
+environment:
+  sdk: ">=3.3.0 <4.0.0"

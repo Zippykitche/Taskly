@@ -1,0 +1,11 @@
+name: shared_ui
+description: Shared Taskly AI UI primitives.
+publish_to: none
+version: 0.1.0
+environment:
+  sdk: ">=3.3.0 <4.0.0"
+dependencies:
+  flutter:
+    sdk: flutter
+  shared_theme:
+    path: ../shared_theme
